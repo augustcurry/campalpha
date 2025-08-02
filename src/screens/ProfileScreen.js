@@ -5,33 +5,12 @@ import { View, Text, FlatList, ActivityIndicator, StyleSheet, Image, TouchableOp
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { collection, query, orderBy, onSnapshot, getDoc, doc as firestoreDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
+import { signOut } from 'firebase/auth';
 import Autocomplete from 'react-native-autocomplete-input';
 import * as ImagePicker from 'expo-image-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import PostCard from '../components/PostCard';
 
-// Using the PostCard from DiscoverScreen. Ideally, this would be in its own component file.
-// For now, we'll redefine it here for simplicity.
-const PostCard = ({ post }) => {
-  const name = post.name || 'Anonymous';
-  const handle = post.handle || '@unknown';
-  const location = post.location || '';
-  const avatar = post.avatar || 'account-circle';
-  const text = post.text || '';
-  return (
-    <View style={styles.postCard}>
-      <MaterialCommunityIcons name={avatar} size={50} color="#8E8E93" style={styles.avatar} />
-      <View style={styles.postContent}>
-        <View style={styles.postHeader}>
-          <Text style={styles.nameText}>{name}</Text>
-          <Text style={styles.handleText}>{handle}</Text>
-          {location ? <Text style={styles.locationText}>· {location}</Text> : null}
-        </View>
-        <Text style={styles.bodyText}>{text}</Text>
-        {post.image && (<Image source={{ uri: post.image }} style={styles.postImage} />)}
-      </View>
-    </View>
-  );
-};
 const storage = getStorage();
 
 
@@ -106,7 +85,7 @@ function UniversityAutocomplete({ value, onChange, inputStyle, placeholder }) {
 
 
 // --- PROFILE TABS COMPONENT ---
-function ProfileTabs({ posts, loading }) {
+function ProfileTabs({ posts, loading, navigation }) {
   const [tab, setTab] = React.useState('Posts');
   const tabList = ['Posts', 'Media'];
   const filteredPosts = tab === 'Media' ? posts.filter(p => p.image) : posts;
@@ -127,7 +106,7 @@ function ProfileTabs({ posts, loading }) {
       ) : (
         <FlatList
           data={filteredPosts}
-          renderItem={({ item }) => <PostCard post={item} />}
+          renderItem={({ item }) => <PostCard post={item} navigation={navigation} />}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={<Text style={{color:'#8E8E93', textAlign:'center', marginTop:32}}>{tab === 'Media' ? 'No media posts yet.' : 'No posts yet.'}</Text>}
@@ -140,6 +119,14 @@ function ProfileTabs({ posts, loading }) {
 
 // --- PROFILE SCREEN ---
 function ProfileScreen({ navigation }) {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
+    } catch (e) {
+      alert('Failed to log out.');
+    }
+  };
   const [userData, setUserData] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -263,6 +250,9 @@ function ProfileScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity onPress={handleEditToggle}>
           <MaterialCommunityIcons name={editing ? 'check' : 'pencil'} size={28} color="#1DA1F2" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleLogout} style={{marginLeft: 12, padding: 4}}>
+          <MaterialCommunityIcons name="logout" size={28} color="#E0245E" />
         </TouchableOpacity>
       </View>
       <View style={{alignItems: 'center', padding: 24, paddingTop: 8, overflow: 'visible'}}>
@@ -401,7 +391,7 @@ function ProfileScreen({ navigation }) {
         </View>
       </View>
       <View style={{borderTopWidth: 1, borderTopColor: '#2C2C2E', marginHorizontal: 16, marginBottom: 8}} />
-      <ProfileTabs posts={userPosts} loading={loading} />
+      <ProfileTabs posts={userPosts} loading={loading} navigation={navigation} />
     </SafeAreaView>
   );
 }

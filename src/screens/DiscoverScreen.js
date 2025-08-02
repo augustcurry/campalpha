@@ -73,32 +73,7 @@ const PostActions = ({ post, navigation }) => {
     );
 };
 
-// --- Reusable PostCard Component ---
-const PostCard = ({ post, navigation }) => {
-  const name = post.name || 'Anonymous';
-  const handle = post.handle || '@unknown';
-  const location = post.location || '';
-  const avatar = post.avatar || 'account-circle';
-  const text = post.text || '';
-  
-  return (
-    <TouchableOpacity onPress={() => navigation.navigate('PostDetail', { postId: post.id })} activeOpacity={0.8}>
-        <View style={styles.postCard}>
-            <MaterialCommunityIcons name={avatar} size={50} color="#8E8E93" style={styles.avatar} />
-            <View style={styles.postContent}>
-                <View style={styles.postHeader}>
-                    <Text style={styles.nameText}>{name}</Text>
-                    <Text style={styles.handleText}>{handle}</Text>
-                    {location ? <Text style={styles.locationText}>· {location}</Text> : null}
-                </View>
-                <Text style={styles.bodyText}>{text}</Text>
-                {post.image && (<Image source={{ uri: post.image }} style={styles.postImage} />)}
-                <PostActions post={post} navigation={navigation} />
-            </View>
-        </View>
-    </TouchableOpacity>
-  );
-};
+import PostCard from '../components/PostCard';
 
 // --- DISCOVER SCREEN ---
 export default function DiscoverScreen({ navigation, setTabBarVisible }) {
@@ -185,6 +160,19 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
     }
   };
 
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      // Optionally navigate to Auth screen or show a message
+      navigation.replace('Auth');
+    } catch (e) {
+      console.error('Logout failed:', e);
+    }
+  };
+
+  const currentUser = auth.currentUser;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -192,9 +180,19 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
           <MaterialCommunityIcons name="account-circle" size={28} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Discover</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('NewPost')}>
-          <MaterialCommunityIcons name="feather" size={28} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {currentUser && (
+            <Text style={styles.authStatus}>
+              {currentUser.email ? currentUser.email : 'Signed in'}
+            </Text>
+          )}
+          <TouchableOpacity onPress={handleLogout} style={{marginLeft: 10}}>
+            <MaterialCommunityIcons name="logout" size={26} color="#FF5252" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('NewPost')} style={{marginLeft: 10}}>
+            <MaterialCommunityIcons name="feather" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
       {loading ? (
         <ActivityIndicator size="large" color="#fff" style={{ marginTop: 40 }} />
@@ -203,7 +201,17 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
           data={posts}
           renderItem={({ item }) => (
             <PostCard 
-              post={item} 
+              post={{
+                ...item,
+                text: item.text || '',
+                image: item.image || null,
+                likes: Array.isArray(item.likes) ? item.likes : [],
+                likeCount: typeof item.likeCount === 'number' ? item.likeCount : 0,
+                commentCount: typeof item.commentCount === 'number' ? item.commentCount : 0,
+                name: item.name || 'Anonymous',
+                handle: item.handle || '@unknown',
+                avatar: item.avatar || 'account-circle',
+              }}
               navigation={navigation}
             />
           )}
@@ -221,6 +229,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#000000', },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2C2C2E', },
   headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold', },
+  authStatus: { color: '#8E8E93', fontSize: 13, marginRight: 2, },
   listContent: { paddingBottom: 50, },
   postCard: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, borderBottomWidth: 1, borderBottomColor: '#2C2C2E', },
   avatar: { marginRight: 12 },

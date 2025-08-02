@@ -18,6 +18,7 @@ import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/fires
 import { db, auth } from '../../firebase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
+
 const storage = getStorage();
 
 export default function NewPostScreen({ navigation }) {
@@ -32,69 +33,104 @@ export default function NewPostScreen({ navigation }) {
       if (user) {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
-          setUserProfile(userDoc.data());
+          const data = userDoc.data();
+          // Ensure username is prefixed with '@' for consistency
+          data.handle = data.username ? `@${data.username}` : `@user_${user.uid.substring(0, 6)}`;
+          setUserProfile(data);
         }
       }
     };
     fetchUserProfile();
+
+    // DEMO POST: Add a demo post to Firestore for feed testing
+    const addDemoPost = async () => {
+      try {
+        const demoPost = {
+          userId: 'demoUser',
+          name: 'Demo User',
+          handle: '@demouser',
+          avatar: 'account-circle',
+          text: '🚀 This is a demo post! If you see this, your feed is updating.',
+          image: null,
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp(),
+          likes: [],
+          likeCount: 0,
+          commentCount: 0,
+        };
+        await addDoc(collection(db, 'posts'), demoPost);
+        console.log('[Demo] Demo post added to Firestore.');
+      } catch (e) {
+        console.error('[Demo] Failed to add demo post:', e);
+      }
+    };
+    addDemoPost();
   }, []);
 
+  // Pick image from library
   const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission required", "Permission to access media library is required.");
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert("Permission required", "Permission to access media library is required.");
+        return;
+      }
+      let pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+      if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
+        setImageUri(pickerResult.assets[0].uri);
+      }
+    } catch (err) {
+      console.error("[Post] Error picking image:", err);
+      Alert.alert("Image Error", err.message || "Could not pick image.");
+    }
+  };
+
+  // Upload image to Firebase Storage and return URL
+  const uploadImageAsync = async (uri) => {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not logged in");
+      const imageName = `${Date.now()}_${Math.floor(Math.random()*1e6)}.jpg`;
+      const storageRef = ref(storage, `posts/${user.uid}/${imageName}`);
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (err) {
+      console.error("[Post] Error uploading image:", err);
+      throw err;
+    }
+  };
+
+  // Handle post submission
+  const handleSubmit = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert("Not signed in", "You must be signed in to post.");
       return;
     }
-
-    let pickerResult = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
-
-    if (!pickerResult.cancelled) {
-      setImageUri(pickerResult.assets[0].uri);
-    }
-  };
-
-  const uploadImageAsync = async (uri) => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-
-    const user = auth.currentUser;
-    if (!user) throw new Error("User not logged in");
-
-    const imageName = `${Date.now()}.jpg`;
-    const storageRef = ref(storage, `posts/${user.uid}/${imageName}`);
-
-    await uploadBytes(storageRef, blob);
-
-    const downloadURL = await getDownloadURL(storageRef);
-    return downloadURL;
-  };
-
-  const handleSubmit = async () => {
     if (!text.trim() && !imageUri) {
       Alert.alert("Empty Post", "Please add some text or select an image.");
       return;
     }
-
     setUploading(true);
-
+    let imageUrl = null;
     try {
-      let imageUrl = null;
+      // Upload image if present
       if (imageUri) {
         imageUrl = await uploadImageAsync(imageUri);
       }
-
-      const user = auth.currentUser;
-      if (!user || !userProfile) throw new Error("User not logged in or profile not loaded");
-
-      await addDoc(collection(db, 'posts'), {
+      // Prepare post data
+      const postData = {
         userId: user.uid,
-        name: userProfile.name,
-        handle: userProfile.handle,
-        avatar: userProfile.avatar,
+        name: userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : 'Anonymous',
+        handle: userProfile?.handle || `@user_${user.uid.substring(0, 6)}`,
+        avatar: userProfile?.photoURL || 'account-circle',
         text: text.trim() || '',
         image: imageUrl,
         createdAt: serverTimestamp(),
@@ -102,13 +138,15 @@ export default function NewPostScreen({ navigation }) {
         likes: [],
         likeCount: 0,
         commentCount: 0,
-      });
-
-      Alert.alert("Post created!");
+      };
+      // Add post to Firestore
+      const docRef = await addDoc(collection(db, 'posts'), postData);
+      console.log("[Post] Post created with ID:", docRef.id);
+      Alert.alert("Success", "Post created!");
       navigation.goBack();
     } catch (error) {
-      console.error("Error creating post:", error);
-      Alert.alert("Failed to create post", error.message || "Please try again.");
+      console.error("[Post] Error creating post:", error, error?.stack);
+      Alert.alert("Failed to create post", error.message || "An unexpected error occurred. Please try again.");
     } finally {
       setUploading(false);
     }

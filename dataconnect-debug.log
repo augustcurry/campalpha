@@ -1,0 +1,12 @@
+I0802 15:01:31.777425   70639 load.go:37] Reloading schema and connectors...
+I0802 15:01:31.803452   70639 control.go:84] [/emulator/campalpha 8567] UpdateResources(): done
+Schema: sources: schema/schema.gql [2088B] 
+Connector "default": sources: connector/queries.gql [1947B] connector/mutations.gql [1301B] 
+I0802 15:01:31.819770   70639 collector.go:107] schema extensions wrote into "/Users/augustcurry/Downloads/campalpha/dataconnect/.dataconnect/schema"
+Generated sources: prelude.gql [73172B] 
+I0802 15:01:31.820324   70639 load.go:115] Finished reloading
+I0802 15:01:31.823773   70639 dev.go:95] Listening on address (HTTP + gRPC): 127.0.0.1:9399
+I0802 15:01:31.824548   70639 dev.go:95] Listening on address (HTTP + gRPC): [::1]:9399
+I0802 15:01:34.991102   70639 control.go:84] [/emulator/campalpha 8170] UpdateResources(): done
+Schema: sources: schema/schema.gql [2088B] 
+Connector "default": sources: connector/mutations.gql [1301B] connector/queries.gql [1947B] 
