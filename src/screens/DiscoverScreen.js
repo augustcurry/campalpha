@@ -6,7 +6,7 @@ import { auth, db } from '../../firebase';
 import { calculatePostScore } from '../utils/feedAlgorithm';
 import { updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 
-// --- NEW PostActions Component for the feed ---
+// --- Reusable PostActions Component ---
 const PostActions = ({ post, navigation }) => {
     const currentUser = auth.currentUser;
     const [isLiked, setIsLiked] = React.useState(false);
@@ -21,23 +21,18 @@ const PostActions = ({ post, navigation }) => {
         if (!currentUser) return;
         const postRef = doc(db, 'posts', post.id);
 
-        // Save previous state
         const prevLiked = isLiked;
         const prevCount = likeCount;
 
-        // Optimistic update
         setIsLiked(!prevLiked);
         setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
 
         try {
             await updateDoc(postRef, {
-                likes: prevLiked
-                    ? arrayRemove(currentUser.uid)
-                    : arrayUnion(currentUser.uid),
+                likes: prevLiked ? arrayRemove(currentUser.uid) : arrayUnion(currentUser.uid),
                 likeCount: increment(prevLiked ? -1 : 1),
             });
         } catch (error) {
-            // Revert on error
             setIsLiked(prevLiked);
             setLikeCount(prevCount);
             console.error("Error updating likes:", error);
@@ -64,7 +59,6 @@ const PostActions = ({ post, navigation }) => {
         </View>
     );
 };
-
 
 // --- Reusable PostCard Component ---
 const PostCard = ({ post, navigation }) => {
@@ -93,7 +87,6 @@ const PostCard = ({ post, navigation }) => {
   );
 };
 
-
 // --- DISCOVER SCREEN ---
 export default function DiscoverScreen({ navigation, setTabBarVisible }) {
   const [posts, setPosts] = useState([]);
@@ -115,11 +108,11 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
         if (userDoc.exists()) {
           setCurrentUserProfile({ uid: user.uid, ...userDoc.data() });
         } else {
-          setCurrentUserProfile({ uid: user.uid });
+          setCurrentUserProfile({ uid: user.uid }); // Basic profile if no doc exists
         }
       } catch (e) {
         console.error('Failed to fetch user profile:', e);
-        setCurrentUserProfile({ uid: user.uid });
+        setCurrentUserProfile({ uid: user.uid }); // Fallback
       }
     };
 
@@ -128,7 +121,7 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
 
   // Subscribe to posts and score them
   useEffect(() => {
-    const q = query(collection(db, 'posts')); // no orderBy, get raw data
+    const q = query(collection(db, 'posts'));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const postList = [];
       querySnapshot.forEach((doc) => {
@@ -136,18 +129,20 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
         postList.push({
           id: doc.id,
           ...data,
+          // Correctly convert Firestore Timestamps to milliseconds
           timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp,
           event_time: data.event_time?.toMillis ? data.event_time.toMillis() : data.event_time,
         });
       });
 
+      // Wait until the user profile is loaded before scoring
       if (!currentUserProfile) {
-        setPosts(postList);
+        setPosts(postList); // Show unsorted posts initially
         setLoading(false);
         return;
       }
 
-      // Calculate score per post
+      // Calculate score for each post
       const scoredPosts = postList.map(post => ({
         ...post,
         score: calculatePostScore(post, currentUserProfile)
@@ -164,7 +159,7 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
     });
 
     return () => unsubscribe();
-  }, [currentUserProfile]);
+  }, [currentUserProfile]); // Re-run when user profile is loaded
 
   const handleScroll = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
@@ -178,7 +173,7 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{marginRight: 12}}>
           <MaterialCommunityIcons name="account-circle" size={28} color="#FFFFFF" />
