@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, ActivityIndicator, StyleSheet, Image, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, StyleSheet, Image, TouchableOpacity, SafeAreaView, Share } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
@@ -43,6 +43,16 @@ const PostActions = ({ post, navigation }) => {
         navigation.navigate('PostDetail', { postId: post.id });
     };
 
+    const handleShare = async () => {
+        try {
+            await Share.share({
+                message: `Check out this post: ${post.text}`,
+            });
+        } catch (error) {
+            console.error("Error sharing post:", error);
+        }
+    };
+
     return (
         <View style={styles.actionBar}>
             <TouchableOpacity onPress={navigateToComments} style={styles.actionButton}>
@@ -55,6 +65,9 @@ const PostActions = ({ post, navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton}>
                 <MaterialCommunityIcons name="repeat-variant" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleShare} style={styles.actionButton}>
+                <MaterialCommunityIcons name="share-variant" size={20} color="#8E8E93" />
             </TouchableOpacity>
         </View>
     );
@@ -220,14 +233,14 @@ const styles = StyleSheet.create({
   postImage: { width: '100%', height: 200, borderRadius: 10, marginTop: 12, },
   actionBar: {
       flexDirection: 'row',
-      justifyContent: 'flex-start',
+      justifyContent: 'space-between',
       marginTop: 12,
       paddingBottom: 12,
+      marginRight: 27,
   },
   actionButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginRight: 27,
   },
   actionText: {
       color: '#8E8E93',

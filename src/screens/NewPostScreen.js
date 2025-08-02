@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
@@ -24,6 +24,20 @@ export default function NewPostScreen({ navigation }) {
   const [text, setText] = useState('');
   const [imageUri, setImageUri] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+        }
+      }
+    };
+    fetchUserProfile();
+  }, []);
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -44,7 +58,6 @@ export default function NewPostScreen({ navigation }) {
   };
 
   const uploadImageAsync = async (uri) => {
-    // Convert URI to Blob
     const response = await fetch(uri);
     const blob = await response.blob();
 
@@ -75,13 +88,17 @@ export default function NewPostScreen({ navigation }) {
       }
 
       const user = auth.currentUser;
-      if (!user) throw new Error("User not logged in");
+      if (!user || !userProfile) throw new Error("User not logged in or profile not loaded");
 
       await addDoc(collection(db, 'posts'), {
         userId: user.uid,
+        name: userProfile.name,
+        handle: userProfile.handle,
+        avatar: userProfile.avatar,
         text: text.trim() || '',
         image: imageUrl,
         createdAt: serverTimestamp(),
+        timestamp: serverTimestamp(),
         likes: [],
         likeCount: 0,
         commentCount: 0,
