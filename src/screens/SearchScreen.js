@@ -2,7 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TextInput } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-function SearchScreen() {
+function SearchScreen({ setTabBarVisible }) {
+  // Ensure tab bar is visible on this screen
+  React.useEffect(() => {
+    if (setTabBarVisible) {
+      setTabBarVisible(true);
+    }
+  }, [setTabBarVisible]);
+
   const searchData = [ { id: 's1', text: 'Tuition Increase' }, { id: 's2', text: 'Milwaukee blows up' }, { id: 's3', text: 'Congress: "We give up"' }, { id: 's4', text: 'Cuomo announces bid for Minister of Israel' }, { id: 's5', text: 'TRUMP signs "Jim Crow Bill"' }, { id: 's6', text: 'Chicago to elect nobody as mayor' }, ];
 
   return (

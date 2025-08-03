@@ -5,76 +5,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase'; // Note the path is now '../../firebase'
-
-// --- University Autocomplete Component ---
-function UniversityAutocomplete({ value, onChange, inputStyle, placeholder }) {
-  const [query, setQuery] = React.useState(value || '');
-  const [results, setResults] = React.useState([]);
-  const [dropdownVisible, setDropdownVisible] = React.useState(false);
-
-  React.useEffect(() => {
-    setQuery(value || '');
-  }, [value]);
-
-  React.useEffect(() => {
-    if (!dropdownVisible || query.length < 2) {
-      setResults([]);
-      return;
-    }
-    let ignore = false;
-    fetch(`https://universities.hipolabs.com/search?name=${encodeURIComponent(query)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (!ignore) {
-          setResults(data.map(u => u.name));
-        }
-      })
-      .catch(() => setResults([]));
-    return () => { ignore = true; };
-  }, [query, dropdownVisible]);
-
-  return (
-    <View style={{ zIndex: 10 }}>
-      <Autocomplete
-        data={results}
-        value={query}
-        onChangeText={text => {
-          setQuery(text);
-          onChange(text);
-          setDropdownVisible(true);
-        }}
-        flatListProps={{
-          keyExtractor: (item, idx) => item + idx,
-          renderItem: ({ item }) => (
-            <TouchableOpacity
-              style={{ padding: 10, backgroundColor: '#18181A', borderBottomWidth: 1, borderBottomColor: '#232325' }}
-              onPress={() => {
-                setQuery(item);
-                onChange(item);
-                setDropdownVisible(false);
-                setResults([]);
-              }}
-            >
-              <Text style={{ color: '#fff' }}>{item}</Text>
-            </TouchableOpacity>
-          ),
-          style: { maxHeight: 120 },
-          keyboardShouldPersistTaps: 'handled',
-        }}
-        inputContainerStyle={{ borderWidth: 0 }}
-        listContainerStyle={{ backgroundColor: '#18181A', borderRadius: 8, marginTop: 2, borderWidth: 0 }}
-        containerStyle={{}}
-        placeholder={placeholder || 'School'}
-        placeholderTextColor="#8E8E93"
-        autoCapitalize="words"
-        hideResults={!dropdownVisible || results.length === 0}
-        onBlur={() => setTimeout(() => setDropdownVisible(false), 200)}
-        style={inputStyle}
-      />
-    </View>
-  );
-}
-
+import SchoolPicker from '../components/SchoolPicker';
 
 // --- AUTH SCREEN ---
 function AuthScreen() {
@@ -116,7 +47,8 @@ function AuthScreen() {
           email: user.email,
           firstName: firstName,
           lastName: lastName,
-          school: school,
+          university: school, // Use university field for consistency
+          school: school,     // Keep school field for backward compatibility
           major: major,
           birthDate: birthDate,
           createdAt: new Date(),
@@ -140,11 +72,15 @@ function AuthScreen() {
             <TextInput style={authStyles.input} placeholder="Last Name" placeholderTextColor="#8E8E93" value={lastName} onChangeText={setLastName} />
             <TextInput style={authStyles.input} placeholder="Username" placeholderTextColor="#8E8E93" value={username} onChangeText={setUsername} autoCapitalize="none" />
             <View style={{ marginHorizontal: 20, marginBottom: 15, zIndex: 10 }}>
-              <UniversityAutocomplete
+              <SchoolPicker
                 value={school}
-                onChange={school => setSchool(school)}
-                inputStyle={authStyles.input}
-                placeholder="School"
+                onSchoolSelect={(schoolName, schoolData) => {
+                  setSchool(schoolName);
+                  // Could store additional school metadata if needed
+                }}
+                placeholder="Search for your school..."
+                inputStyle={[authStyles.input, { marginHorizontal: 0, marginBottom: 0 }]}
+                maxResults={8}
               />
             </View>
             <TextInput style={authStyles.input} placeholder="Major" placeholderTextColor="#8E8E93" value={major} onChangeText={setMajor} />

@@ -10,78 +10,9 @@ import Autocomplete from 'react-native-autocomplete-input';
 import * as ImagePicker from 'expo-image-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import PostCard from '../components/PostCard';
+import SchoolPicker from '../components/SchoolPicker';
 
 const storage = getStorage();
-
-
-// --- University Autocomplete Component ---
-function UniversityAutocomplete({ value, onChange, inputStyle, placeholder }) {
-  const [query, setQuery] = React.useState(value || '');
-  const [results, setResults] = React.useState([]);
-  const [dropdownVisible, setDropdownVisible] = React.useState(false);
-
-  React.useEffect(() => {
-    setQuery(value || '');
-  }, [value]);
-
-  React.useEffect(() => {
-    if (!dropdownVisible || query.length < 2) {
-      setResults([]);
-      return;
-    }
-    let ignore = false;
-    fetch(`https://universities.hipolabs.com/search?name=${encodeURIComponent(query)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (!ignore) {
-          setResults(data.map(u => u.name));
-        }
-      })
-      .catch(() => setResults([]));
-    return () => { ignore = true; };
-  }, [query, dropdownVisible]);
-
-  return (
-    <View style={{ zIndex: 10 }}>
-      <Autocomplete
-        data={results}
-        value={query}
-        onChangeText={text => {
-          setQuery(text);
-          onChange(text);
-          setDropdownVisible(true);
-        }}
-        flatListProps={{
-          keyExtractor: (item, idx) => item + idx,
-          renderItem: ({ item }) => (
-            <TouchableOpacity
-              style={{ padding: 10, backgroundColor: '#18181A', borderBottomWidth: 1, borderBottomColor: '#232325' }}
-              onPress={() => {
-                setQuery(item);
-                onChange(item);
-                setDropdownVisible(false);
-                setResults([]);
-              }}
-            >
-              <Text style={{ color: '#fff' }}>{item}</Text>
-            </TouchableOpacity>
-          ),
-          style: { maxHeight: 120 },
-          keyboardShouldPersistTaps: 'handled',
-        }}
-        inputContainerStyle={{ borderWidth: 0 }}
-        listContainerStyle={{ backgroundColor: '#18181A', borderRadius: 8, marginTop: 2, borderWidth: 0 }}
-        containerStyle={{}}
-        placeholder={placeholder || 'School'}
-        placeholderTextColor="#8E8E93"
-        autoCapitalize="words"
-        hideResults={!dropdownVisible || results.length === 0}
-        onBlur={() => setTimeout(() => setDropdownVisible(false), 200)}
-        style={inputStyle}
-      />
-    </View>
-  );
-}
 
 
 // --- PROFILE TABS COMPONENT ---
@@ -310,15 +241,33 @@ function ProfileScreen({ navigation }) {
               <MaterialCommunityIcons name="school-outline" size={22} color="#1DA1F2" style={{marginRight: 8}} />
               {editing ? (
                 <View style={{flex: 1, zIndex: 30, position: 'relative', overflow: 'visible'}}>
-                  <UniversityAutocomplete
-                    value={userData.school}
-                    onChange={school => setUserData({ ...userData, school })}
-                    inputStyle={[styles.profileInfoValueLarge, styles.editGlow]}
-                    placeholder="School"
+                  <SchoolPicker
+                    value={userData.university || userData.school}
+                    onSchoolSelect={(schoolName, schoolData) => {
+                      setUserData({ 
+                        ...userData, 
+                        university: schoolName, 
+                        school: schoolName,
+                        schoolData: schoolData // Store additional school metadata
+                      });
+                    }}
+                    placeholder="Search for your school..."
+                    style={{ flex: 1 }}
+                    inputStyle={[
+                      styles.profileInfoValueLarge, 
+                      styles.editGlow,
+                      { 
+                        textAlign: 'left',
+                        fontSize: 16,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                      }
+                    ]}
+                    maxResults={8}
                   />
                 </View>
               ) : (
-                <Text style={styles.profileInfoValueLarge}>{userData.school || 'N/A'}</Text>
+                <Text style={styles.profileInfoValueLarge}>{userData.university || userData.school || 'N/A'}</Text>
               )}
             </View>
             <View style={styles.profileInfoColIconOnlyNew}>

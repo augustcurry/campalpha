@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,16 +28,21 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { repostToFeed } from '../services/repost';
 
 // --- PostCard Component ---
 const PostCard = ({ post, navigation }) => {
   const name = post.name || 'Anonymous';
   const handle = post.handle || '@unknown';
   const postDate = post.createdAt?.toDate();
+  // Format time as HH:MM AM/PM (no seconds)
   const formattedDate = postDate
-    ? `${postDate.toLocaleTimeString()} · ${postDate.toLocaleDateString()}`
+    ? `${postDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${postDate.toLocaleDateString()}`
     : 'Just now';
+  const photoURL = post.photoURL || null;
   const avatar = post.avatar || 'account-circle';
+
+  const [avatarLoaded, setAvatarLoaded] = React.useState(false);
 
   const navigateToProfile = () => {
     if (post.userId) {
@@ -48,22 +53,67 @@ const PostCard = ({ post, navigation }) => {
   return (
     <View style={styles.postCard}>
       <TouchableOpacity onPress={navigateToProfile}>
-        <MaterialCommunityIcons
-          name={avatar}
-          size={50}
-          color="#8E8E93"
-          style={styles.avatar}
-        />
+        {photoURL ? (
+          <View style={{ width: 50, height: 50, marginRight: 12, borderRadius: 25, backgroundColor: '#18181A', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+            {!avatarLoaded && (
+              <MaterialCommunityIcons
+                name={avatar}
+                size={40}
+                color="#232325"
+                style={{ position: 'absolute', left: 5, top: 5 }}
+              />
+            )}
+            <Image
+              source={{ uri: photoURL }}
+              style={{ width: 50, height: 50, borderRadius: 25 }}
+              onLoad={() => setAvatarLoaded(true)}
+              onError={() => setAvatarLoaded(true)}
+            />
+          </View>
+        ) : (
+          <MaterialCommunityIcons
+            name={avatar}
+            size={50}
+            color="#8E8E93"
+            style={styles.avatar}
+          />
+        )}
       </TouchableOpacity>
       <View style={styles.postContent}>
         <View style={styles.postHeader}>
           <Text style={styles.nameText}>{name}</Text>
           <Text style={styles.handleText}>{handle}</Text>
+          {post.school && (
+            <View style={styles.schoolBadge}>
+              <MaterialCommunityIcons name="school" size={12} color="#1DA1F2" />
+              <Text style={styles.schoolText}>{post.school}</Text>
+            </View>
+          )}
         </View>
+        {post.isRepost && post.repostedBy && (
+          <View style={styles.repostIndicator}>
+            <MaterialCommunityIcons name="repeat-variant" size={16} color="#8E8E93" style={{ marginRight: 4 }} />
+            <Text style={styles.repostText}>
+              Reposted by {post.repostedBy.name || 'Someone'}
+            </Text>
+          </View>
+        )}
         <Text style={styles.bodyText}>{post.text || ''}</Text>
         {post.image && (
           <Image source={{ uri: post.image }} style={styles.postImage} />
         )}
+        
+        {/* Show hashtags if they exist */}
+        {post.hashtags && post.hashtags.length > 0 && (
+          <View style={styles.hashtagContainer}>
+            {post.hashtags.map((tag, index) => (
+              <View key={index} style={styles.hashtagTag}>
+                <Text style={styles.hashtagText}>#{tag}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        
         <Text style={styles.timestampText}>{formattedDate}</Text>
       </View>
     </View>
@@ -71,10 +121,11 @@ const PostCard = ({ post, navigation }) => {
 };
 
 // --- ActionBar Component ---
-const ActionBar = ({ post, postId }) => {
+const ActionBar = ({ post, postId, onCommentPress }) => {
   const currentUser = auth.currentUser;
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likeCount || 0);
+  const [reposting, setReposting] = useState(false);
 
   useEffect(() => {
     setIsLiked(currentUser && post.likes?.includes(currentUser.uid));
@@ -90,14 +141,26 @@ const ActionBar = ({ post, postId }) => {
     });
   };
 
+  const handleRepost = async () => {
+    if (reposting) return;
+    setReposting(true);
+    try {
+      await repostToFeed(post);
+      // Optionally show a toast or feedback
+    } catch (e) {
+      console.error('Repost failed', e);
+    }
+    setReposting(false);
+  };
+
   return (
     <View style={styles.actionBar}>
-      <TouchableOpacity style={styles.actionButton}>
+      <TouchableOpacity style={styles.actionButton} onPress={onCommentPress}>
         <MaterialCommunityIcons name="comment-outline" size={22} color="#8E8E93" />
         <Text style={styles.actionText}>{post.commentCount || 0}</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.actionButton}>
-        <MaterialCommunityIcons name="twitter-retweet" size={22} color="#8E8E93" />
+      <TouchableOpacity style={styles.actionButton} onPress={handleRepost} disabled={reposting}>
+        <MaterialCommunityIcons name="repeat-variant" size={22} color={reposting ? '#444' : '#8E8E93'} />
       </TouchableOpacity>
       <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
         <MaterialCommunityIcons
@@ -105,7 +168,7 @@ const ActionBar = ({ post, postId }) => {
           size={22}
           color={isLiked ? '#E0245E' : '#8E8E93'}
         />
-        <Text style={[styles.actionText, isLiked && { color: '#E0245E' }]}>
+        <Text style={[styles.actionText, isLiked && { color: '#E0245E' }]}> 
           {likeCount}
         </Text>
       </TouchableOpacity>
@@ -120,25 +183,13 @@ const ActionBar = ({ post, postId }) => {
 };
 
 // --- CommentInput Component ---
-const CommentInput = ({ postId, parentId = null, parentUsername = null, onCommentPosted }) => {
+const CommentInput = React.forwardRef(({ postId, parentId = null, parentUsername = null, onCommentPosted, onBlur }, ref) => {
   const [commentText, setCommentText] = useState('');
   const currentUser = auth.currentUser;
 
   const handleAddComment = async () => {
-    console.log('Send button pressed');
-    console.log('Current user:', currentUser);
-    console.log('Comment text:', commentText);
-
-    if (!commentText.trim()) {
-      console.warn('Empty comment, not posting');
-      return;
-    }
-
-    if (!currentUser) {
-      console.warn('No authenticated user, cannot post comment');
-      return;
-    }
-
+    if (!commentText.trim()) return;
+    if (!currentUser) return;
     try {
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
@@ -154,7 +205,6 @@ const CommentInput = ({ postId, parentId = null, parentUsername = null, onCommen
         commenterInfo.username = userData.username || 'unknown';
         commenterInfo.avatar = userData.avatarUrl || 'account-circle';
       }
-
       const commentsCollectionRef = collection(db, 'posts', postId, 'comments');
       await addDoc(commentsCollectionRef, {
         text: commentText,
@@ -168,16 +218,12 @@ const CommentInput = ({ postId, parentId = null, parentUsername = null, onCommen
         likes: [],
         likeCount: 0,
       });
-
       if (!parentId) {
         const postRef = doc(db, 'posts', postId);
         await updateDoc(postRef, { commentCount: increment(1) });
       }
-
       setCommentText('');
       if (onCommentPosted) onCommentPosted();
-
-      console.log('Comment posted successfully');
     } catch (error) {
       console.error('Error adding comment:', error);
     }
@@ -186,24 +232,27 @@ const CommentInput = ({ postId, parentId = null, parentUsername = null, onCommen
   return (
     <View style={styles.commentInputContainer}>
       <TextInput
+        ref={ref}
         style={styles.commentInput}
         placeholder="Add a comment..."
         placeholderTextColor="#8E8E93"
         value={commentText}
         onChangeText={setCommentText}
+        onBlur={onBlur}
+        autoFocus
       />
       <TouchableOpacity onPress={handleAddComment}>
         <MaterialCommunityIcons name="send-circle" size={32} color="#1DA1F2" />
       </TouchableOpacity>
     </View>
   );
-};
+});
 
 // --- CommentCard Component ---
-const CommentCard = ({ comment, postId, navigation, depth = 0 }) => {
+const CommentCard = ({ comment, postId, navigation, depth = 0, activeInput, setActiveInput }) => {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(comment.likeCount || 0);
-  const [showReplyInput, setShowReplyInput] = useState(false);
+  const inputRef = useRef(null);
   const currentUser = auth.currentUser;
 
   // --- Display logic ---
@@ -224,8 +273,37 @@ const CommentCard = ({ comment, postId, navigation, depth = 0 }) => {
     });
   };
 
+  const handleReply = () => {
+    setActiveInput({ parentId: comment.id, parentUsername: comment.username });
+    setTimeout(() => {
+      if (inputRef.current) inputRef.current.focus();
+    }, 100);
+  };
+
+  // Only render the reply input for the top-most matching comment in the visible tree
+  let replyInputRendered = false;
+  const renderReplies = (replies) => {
+    return replies?.map((reply) => (
+      <CommentCard
+        key={reply.id}
+        comment={reply}
+        postId={postId}
+        navigation={navigation}
+        depth={depth + 1}
+        activeInput={activeInput}
+        setActiveInput={setActiveInput}
+      />
+    ));
+  };
+
+  let showReplyInput = false;
+  if (activeInput && activeInput.parentId === comment.id) {
+    // Only show the reply input if none of the replies also match activeInput
+    showReplyInput = !comment.replies?.some(r => r.id === activeInput.parentId);
+  }
+
   return (
-    <View style={[styles.commentWrapper, depth > 0 && { marginLeft: 15 }]}>
+    <View style={[styles.commentWrapper, depth > 0 && { marginLeft: 15 }]}> 
       {depth > 0 && <View style={styles.threadLine} />}
       <View style={{ flex: 1 }}>
         <View style={styles.commentCard}>
@@ -258,12 +336,12 @@ const CommentCard = ({ comment, postId, navigation, depth = 0 }) => {
                   size={18}
                   color={isLiked ? '#E0245E' : '#8E8E93'}
                 />
-                <Text style={[styles.commentActionText, isLiked && { color: '#E0245E' }]}>
+                <Text style={[styles.commentActionText, isLiked && { color: '#E0245E' }]}> 
                   {likeCount > 0 && likeCount}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setShowReplyInput(!showReplyInput)}
+                onPress={handleReply}
                 style={styles.actionButton}
               >
                 <MaterialCommunityIcons name="reply" size={18} color="#8E8E93" />
@@ -272,25 +350,20 @@ const CommentCard = ({ comment, postId, navigation, depth = 0 }) => {
             </View>
           </View>
         </View>
-        {showReplyInput && (
+        {/* Always show the reply input for the comment being replied to, even if main input is hidden */}
+        {activeInput && activeInput.parentId === comment.id && (
           <View style={{ marginTop: 10 }}>
             <CommentInput
+              ref={inputRef}
               postId={postId}
               parentId={comment.id}
               parentUsername={comment.username}
-              onCommentPosted={() => setShowReplyInput(false)}
+              onCommentPosted={() => setActiveInput(null)}
+              onBlur={() => setActiveInput(null)}
             />
           </View>
         )}
-        {comment.replies?.map((reply) => (
-          <CommentCard
-            key={reply.id}
-            comment={reply}
-            postId={postId}
-            navigation={navigation}
-            depth={depth + 1}
-          />
-        ))}
+        {renderReplies(comment.replies)}
       </View>
     </View>
   );
@@ -302,11 +375,32 @@ export default function PostDetailScreen({ route, navigation }) {
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeInput, setActiveInput] = useState(null); // { parentId, parentUsername }
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const postDocRef = doc(db, 'posts', postId);
-    const unsubscribePost = onSnapshot(postDocRef, (docSnap) => {
-      if (docSnap.exists()) setPost({ id: docSnap.id, ...docSnap.data() });
+    let unsubUser = null;
+    const unsubscribePost = onSnapshot(postDocRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const postData = docSnap.data();
+        let userProfile = {};
+        if (postData.userId) {
+          const userDocRef = doc(db, 'users', postData.userId);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            userProfile = userDocSnap.data();
+          }
+        }
+        setPost({
+          id: docSnap.id,
+          ...postData,
+          photoURL: userProfile.photoURL || '',
+          avatar: userProfile.avatar || 'account-circle',
+          name: userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName}` : postData.name,
+          handle: userProfile.username ? `@${userProfile.username}` : postData.handle,
+        });
+      }
       setLoading(false);
     });
 
@@ -318,22 +412,41 @@ export default function PostDetailScreen({ route, navigation }) {
       const allComments = [];
       querySnapshot.forEach((doc) => allComments.push({ id: doc.id, ...doc.data() }));
 
+      // Helper to recursively sort replies by createdAt
+      function sortReplies(commentsArr) {
+        return commentsArr
+          .sort((a, b) => {
+            const aTime = a.createdAt?.seconds || 0;
+            const bTime = b.createdAt?.seconds || 0;
+            return aTime - bTime;
+          })
+          .map(comment => ({
+            ...comment,
+            replies: comment.replies ? sortReplies(comment.replies) : [],
+          }));
+      }
+
       const commentMap = {};
       const nestedComments = [];
       allComments.forEach((comment) => (commentMap[comment.id] = { ...comment, replies: [] }));
+      // Attach replies to their parent if parent exists, otherwise treat as top-level
       allComments.forEach((comment) => {
-        if (comment.parentId) {
-          commentMap[comment.parentId]?.replies.push(commentMap[comment.id]);
+        if (comment.parentId && commentMap[comment.parentId]) {
+          commentMap[comment.parentId].replies.push(commentMap[comment.id]);
+        } else if (!comment.parentId) {
+          nestedComments.push(commentMap[comment.id]);
         } else {
+          // Orphaned reply (parent deleted), treat as top-level
           nestedComments.push(commentMap[comment.id]);
         }
       });
-      setComments(nestedComments);
+      setComments(sortReplies(nestedComments));
     });
 
     return () => {
       unsubscribePost();
       unsubscribeComments();
+      if (unsubUser) unsubUser();
     };
   }, [postId]);
 
@@ -358,6 +471,14 @@ export default function PostDetailScreen({ route, navigation }) {
       </SafeAreaView>
     );
 
+  // Handler for main comment button
+  const handleMainComment = () => {
+    setActiveInput({ parentId: null, parentUsername: null });
+    setTimeout(() => {
+      if (inputRef.current) inputRef.current.focus();
+    }, 100);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -376,24 +497,63 @@ export default function PostDetailScreen({ route, navigation }) {
           ListHeaderComponent={() => (
             <>
               <PostCard post={post} navigation={navigation} />
-              <ActionBar post={post} postId={postId} />
+              <ActionBar post={post} postId={postId} onCommentPress={handleMainComment} />
               <View style={styles.commentSectionHeader}>
                 <Text style={styles.commentHeader}>Comments</Text>
               </View>
             </>
           )}
           renderItem={({ item }) => (
-            <CommentCard comment={item} postId={postId} navigation={navigation} depth={0} />
+            <CommentCard
+              comment={item}
+              postId={postId}
+              navigation={navigation}
+              depth={0}
+              activeInput={activeInput}
+              setActiveInput={setActiveInput}
+            />
           )}
         />
 
-        <CommentInput postId={postId} />
+        {/* Only show the main comment input if not replying to a comment */}
+        {activeInput && activeInput.parentId !== null ? null : (
+          activeInput && activeInput.parentId === null ? (
+            <CommentInput
+              ref={inputRef}
+              postId={postId}
+              onCommentPosted={() => setActiveInput(null)}
+              onBlur={() => setActiveInput(null)}
+            />
+          ) : (
+            <View style={styles.commentInputContainer}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10 }}
+                onPress={handleMainComment}
+              >
+                <Text style={{ color: '#8E8E93' }}>Add a comment...</Text>
+              </TouchableOpacity>
+              <MaterialCommunityIcons name="send-circle" size={32} color="#444" style={{ marginLeft: 8 }} />
+            </View>
+          )
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  repostIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    marginTop: 2,
+    gap: 2,
+  },
+  repostText: {
+    color: '#8E8E93',
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
   safeArea: { flex: 1, backgroundColor: '#000000' },
   container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   text: { color: '#FFFFFF', fontSize: 20 },
@@ -408,15 +568,31 @@ const styles = StyleSheet.create({
   postContent: { flex: 1 },
   postHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' },
   nameText: { color: '#FFFFFF', fontWeight: 'bold', marginRight: 5, fontSize: 15 },
-  handleText: { color: '#8E8E93', fontSize: 15 },
+  handleText: { color: '#8E8E93', fontSize: 15, marginRight: 5 },
+  schoolBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(29, 161, 242, 0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 4,
+  },
+  schoolText: {
+    color: '#1DA1F2',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
   bodyText: { color: '#FFFFFF', fontSize: 18, lineHeight: 24, marginVertical: 8 },
   postImage: { width: '100%', height: 200, borderRadius: 10, marginTop: 12 },
   timestampText: { color: '#8E8E93', fontSize: 14, marginTop: 12 },
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 16,
-    marginHorizontal: 16,
+    paddingVertical: 4,
+    marginHorizontal: 0,
+    gap: 0,
   },
   actionButton: { flexDirection: 'row', alignItems: 'center' },
   actionText: { color: '#8E8E93', marginLeft: 6, fontSize: 14 },
@@ -446,5 +622,26 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     marginRight: 8,
+  },
+  hashtagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  hashtagTag: {
+    backgroundColor: 'rgba(29, 161, 242, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(29, 161, 242, 0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  hashtagText: {
+    color: '#1DA1F2',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

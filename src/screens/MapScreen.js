@@ -1,7 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 
-function MapScreen() {
+function MapScreen({ setTabBarVisible }) {
+  // Ensure tab bar is visible on this screen
+  React.useEffect(() => {
+    if (setTabBarVisible) {
+      setTabBarVisible(true);
+    }
+  }, [setTabBarVisible]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>

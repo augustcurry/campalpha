@@ -1,0 +1,38 @@
+[debug] [2025-08-02T20:37:37.577Z] [Firebase Plugin] Activating Firebase extension.
+[info] [Firebase Plugin] Checked firebase-tools, is up to date!
+[debug] [2025-08-02T20:37:39.866Z] [Firebase Plugin] requireAuthWrapper
+[debug] [2025-08-02T20:37:39.867Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-08-02T20:37:39.867Z] > authorizing via signed-in user (augustcurry54@gmail.com)
+[debug] [2025-08-02T20:37:39.871Z] Checked if tokens are valid: false, expires at: 1754167634327
+[debug] [2025-08-02T20:37:39.871Z] Checked if tokens are valid: false, expires at: 1754167634327
+[debug] [2025-08-02T20:37:39.871Z] > refreshing access token with scopes: []
+[debug] [2025-08-02T20:37:39.872Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-08-02T20:37:39.872Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-08-02T20:37:39.878Z] [Firebase Plugin] VSCode notification server listening on port 40001
+[info] [Firebase Plugin] Starting Data Connect toolkit (version 2.10.1) on port 50001
+[debug] [2025-08-02T20:37:42.672Z] I0802 15:37:42.658353   86605 control.go:84] [/emulator/campalpha fe94] UpdateResources(): done
+Schema: sources: schema/schema.gql [2088B] 
+Connector "default": sources: connector/mutations.gql [1301B] connector/queries.gql [1947B] 
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0802 15:37:42.658353   86605 control.go:84] [/emulator/campalpha fe94] UpdateResources(): done\nSchema: sources: schema/schema.gql [2088B] \nConnector \"default\": sources: connector/mutations.gql [1301B] connector/queries.gql [1947B] \n"}}
+[debug] [2025-08-02T20:37:42.674Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"dataconnect"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-08-02T20:37:42.674Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"dataconnect"},"message":"Ignoring unsupported arg: port"}}
+[debug] [2025-08-02T20:37:42.675Z] Starting Data Connect Emulator with command {"binary":"/Users/augustcurry/.cache/firebase/emulators/dataconnect-emulator-2.10.1","args":["--logtostderr","-v=2","dev","--listen=localhost:50001","--config_dir=/Users/augustcurry/Downloads/campalpha/dataconnect","--enable_output_schema_extensions=true","--enable_output_generated_sdk=true"],"optionalArgs":["listen","config_dir","enable_output_schema_extensions","enable_output_generated_sdk"],"joinArgs":true,"shell":false,"port":9399} {"metadata":{"emulator":{"name":"dataconnect"},"message":"Starting Data Connect Emulator with command {\"binary\":\"/Users/augustcurry/.cache/firebase/emulators/dataconnect-emulator-2.10.1\",\"args\":[\"--logtostderr\",\"-v=2\",\"dev\",\"--listen=localhost:50001\",\"--config_dir=/Users/augustcurry/Downloads/campalpha/dataconnect\",\"--enable_output_schema_extensions=true\",\"--enable_output_generated_sdk=true\"],\"optionalArgs\":[\"listen\",\"config_dir\",\"enable_output_schema_extensions\",\"enable_output_generated_sdk\"],\"joinArgs\":true,\"shell\":false,\"port\":9399}"}}
+[info] i  dataconnect: Data Connect Emulator logging to dataconnect-debug.log {"metadata":{"emulator":{"name":"dataconnect"},"message":"Data Connect Emulator logging to dataconnect-debug.log"}}
+[debug] [2025-08-02T20:37:43.122Z] I0802 15:37:43.014529   86613 load.go:37] Reloading schema and connectors...
+I0802 15:37:43.068002   86613 control.go:84] [/emulator/campalpha 0eae] UpdateResources(): done
+Schema: sources: schema/schema.gql [2088B] 
+Connector "default": sources: connector/mutations.gql [1301B] connector/queries.gql [1947B] 
+I0802 15:37:43.100050   86613 collector.go:107] schema extensions wrote into "/Users/augustcurry/Downloads/campalpha/dataconnect/.dataconnect/schema"
+Generated sources: prelude.gql [73172B] 
+I0802 15:37:43.100507   86613 load.go:115] Finished reloading
+I0802 15:37:43.115377   86613 dev.go:95] Listening on address (HTTP + gRPC): 127.0.0.1:50001
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0802 15:37:43.014529   86613 load.go:37] Reloading schema and connectors...\nI0802 15:37:43.068002   86613 control.go:84] [/emulator/campalpha 0eae] UpdateResources(): done\nSchema: sources: schema/schema.gql [2088B] \nConnector \"default\": sources: connector/mutations.gql [1301B] connector/queries.gql [1947B] \nI0802 15:37:43.100050   86613 collector.go:107] schema extensions wrote into \"/Users/augustcurry/Downloads/campalpha/dataconnect/.dataconnect/schema\"\nGenerated sources: prelude.gql [73172B] \nI0802 15:37:43.100507   86613 load.go:115] Finished reloading\nI0802 15:37:43.115377   86613 dev.go:95] Listening on address (HTTP + gRPC): 127.0.0.1:50001\n"}}
+[debug] [2025-08-02T20:37:43.137Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-08-02T20:37:43.137Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-08-02T20:37:43.159Z] [Firebase Plugin] User found:  augustcurry54@gmail.com
+[info] [Firebase Plugin] (Core:Project) New user detected, fetching projects
+[debug] [2025-08-02T20:37:43.160Z] Checked if tokens are valid: true, expires at: 1754170662137
+[debug] [2025-08-02T20:37:43.160Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[error] [Firebase Plugin] error:  {}
+[debug] [2025-08-02T20:37:43.715Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2025-08-02T20:37:43.715Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
