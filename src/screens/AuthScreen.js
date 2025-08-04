@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
-import Autocomplete from 'react-native-autocomplete-input';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase'; // Note the path is now '../../firebase'
-import SchoolPicker from '../components/SchoolPicker';
+import SimpleSchoolPicker from '../components/SimpleSchoolPicker';
 
 // --- AUTH SCREEN ---
 function AuthScreen() {
@@ -72,15 +71,15 @@ function AuthScreen() {
             <TextInput style={authStyles.input} placeholder="Last Name" placeholderTextColor="#8E8E93" value={lastName} onChangeText={setLastName} />
             <TextInput style={authStyles.input} placeholder="Username" placeholderTextColor="#8E8E93" value={username} onChangeText={setUsername} autoCapitalize="none" />
             <View style={{ marginHorizontal: 20, marginBottom: 15, zIndex: 10 }}>
-              <SchoolPicker
+              <SimpleSchoolPicker
                 value={school}
-                onSchoolSelect={(schoolName, schoolData) => {
+                onSchoolSelect={(schoolName) => {
                   setSchool(schoolName);
-                  // Could store additional school metadata if needed
                 }}
                 placeholder="Search for your school..."
-                inputStyle={[authStyles.input, { marginHorizontal: 0, marginBottom: 0 }]}
-                maxResults={8}
+                style={{ marginHorizontal: 0, marginBottom: 0 }}
+                maxResults={12}
+                requireVerification={true}
               />
             </View>
             <TextInput style={authStyles.input} placeholder="Major" placeholderTextColor="#8E8E93" value={major} onChangeText={setMajor} />

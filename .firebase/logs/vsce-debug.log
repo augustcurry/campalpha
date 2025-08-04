@@ -36,3 +36,37 @@ I0802 15:37:43.115377   86613 dev.go:95] Listening on address (HTTP + gRPC): 127
 [error] [Firebase Plugin] error:  {}
 [debug] [2025-08-02T20:37:43.715Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
 [debug] [2025-08-02T20:37:43.715Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[debug] [2025-08-03T16:55:14.448Z] [Firebase Plugin] Value of process.env.MONOSPACE_ENV: undefined
+[debug] [2025-08-03T16:55:14.450Z] [Firebase Plugin] requireAuthWrapper
+[debug] [2025-08-03T16:55:14.455Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-08-03T16:55:14.456Z] > authorizing via signed-in user (augustcurry54@gmail.com)
+[debug] [2025-08-03T16:55:14.456Z] Checked if tokens are valid: false, expires at: 1754170662137
+[debug] [2025-08-03T16:55:14.457Z] Checked if tokens are valid: false, expires at: 1754170662137
+[debug] [2025-08-03T16:55:14.457Z] > refreshing access token with scopes: []
+[debug] [2025-08-03T16:55:14.462Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-08-03T16:55:14.462Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-08-03T16:55:14.474Z] [Firebase Plugin] Value of process.env.MONOSPACE_ENV: undefined
+[debug] [2025-08-03T16:55:14.474Z] [Firebase Plugin] requireAuthWrapper
+[debug] [2025-08-03T16:55:14.474Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-08-03T16:55:14.474Z] > authorizing via signed-in user (augustcurry54@gmail.com)
+[debug] [2025-08-03T16:55:14.475Z] Checked if tokens are valid: false, expires at: 1754170662137
+[debug] [2025-08-03T16:55:14.475Z] Checked if tokens are valid: false, expires at: 1754170662137
+[debug] [2025-08-03T16:55:14.475Z] > refreshing access token with scopes: []
+[debug] [2025-08-03T16:55:14.475Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-08-03T16:55:14.475Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-08-03T16:55:14.646Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-08-03T16:55:14.646Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-08-03T16:55:14.659Z] [Firebase Plugin] User found:  augustcurry54@gmail.com
+[info] [Firebase Plugin] (Core:Project) New user detected, fetching projects
+[debug] [2025-08-03T16:55:14.659Z] Checked if tokens are valid: true, expires at: 1754243713646
+[debug] [2025-08-03T16:55:14.661Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2025-08-03T16:55:14.669Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-08-03T16:55:14.670Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-08-03T16:55:14.678Z] [Firebase Plugin] User found:  augustcurry54@gmail.com
+[info] [Firebase Plugin] (Core:Project) New user detected, fetching projects
+[debug] [2025-08-03T16:55:14.678Z] Checked if tokens are valid: true, expires at: 1754243713670
+[debug] [2025-08-03T16:55:14.679Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2025-08-03T16:55:15.063Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2025-08-03T16:55:15.063Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[debug] [2025-08-03T16:55:15.147Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2025-08-03T16:55:15.148Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]

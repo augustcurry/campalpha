@@ -6,11 +6,11 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { collection, query, orderBy, onSnapshot, getDoc, doc as firestoreDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { signOut } from 'firebase/auth';
-import Autocomplete from 'react-native-autocomplete-input';
 import * as ImagePicker from 'expo-image-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import PostCard from '../components/PostCard';
-import SchoolPicker from '../components/SchoolPicker';
+import SimpleSchoolPicker from '../components/SimpleSchoolPicker';
+import { getCleanUniversityName } from '../data/universities';
 
 const storage = getStorage();
 
@@ -63,6 +63,7 @@ function ProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   
   // pickImageAndUpload refactored to use Blob upload with fetch
   const pickImageAndUpload = async () => {
@@ -132,7 +133,7 @@ function ProfileScreen({ navigation }) {
     const postsQuery = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
 
     const unsubUser = onSnapshot(userDocRef, (doc) => {
-      if (doc.exists()) {
+      if (doc.exists() && !saving) { // Don't update if we're currently saving
         setUserData(doc.data());
       }
     });
@@ -153,24 +154,66 @@ function ProfileScreen({ navigation }) {
       unsubUser();
       unsubPosts();
     };
-  }, [userData?.username]); // Rerun if username changes
+  }, [userData?.username, saving]); // Include saving in dependencies
 
   if (!userData) {
     return <View style={styles.container}><ActivityIndicator size="large" color="#fff" /></View>;
   }
 
   const handleEditToggle = async () => {
-    if (editing) {
+    console.log('[ProfileScreen] Edit toggle clicked, current editing state:', editing, 'saving state:', saving);
+    
+    if (editing && !saving) {
+      console.log('[ProfileScreen] Saving profile data:', userData);
+      setSaving(true);
+      
       try {
         const user = auth.currentUser;
         if (user) {
-          await setDoc(firestoreDoc(db, 'users', user.uid), userData, { merge: true });
+          // Clean data - remove undefined values before saving to Firebase
+          const cleanProfileData = {
+            firstName: userData.firstName || '',
+            lastName: userData.lastName || '',
+            university: userData.university || '',
+            school: userData.school || userData.university || '',
+            major: userData.major || '',
+            bio: userData.bio || '',
+            // Keep existing fields that aren't being edited, but filter out undefined
+            ...Object.fromEntries(
+              Object.entries(userData).filter(([key, value]) => value !== undefined)
+            )
+          };
+          
+          console.log('[ProfileScreen] Cleaned profile data:', cleanProfileData);
+          
+          await setDoc(firestoreDoc(db, 'users', user.uid), cleanProfileData, { merge: true });
+          
+          console.log('[ProfileScreen] Profile saved successfully');
+          
+          // Update user data with cleaned data first
+          setUserData(cleanProfileData);
+          console.log('[ProfileScreen] User data updated with cleaned data');
+          
+          // Reset saving state first
+          setSaving(false);
+          console.log('[ProfileScreen] Saving state reset to false');
+          
+          // Exit edit mode after resetting saving state
+          setEditing(false);
+          console.log('[ProfileScreen] Edit mode set to false - UI should now show display view');
+          
         }
       } catch (e) {
-        alert('Failed to save profile.');
+        console.error('[ProfileScreen] Error saving profile:', e);
+        // Don't exit edit mode if save failed, but still reset saving state
+        setSaving(false);
+        console.log('[ProfileScreen] Saving state reset to false (error case)');
       }
+    } else if (!editing && !saving) {
+      console.log('[ProfileScreen] Entering edit mode');
+      // Entering edit mode - only if not currently saving
+      setEditing(true);
     }
-    setEditing(e => !e);
   };
 
   return (
@@ -179,15 +222,19 @@ function ProfileScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={{padding: 4}}>
           <MaterialCommunityIcons name="arrow-left" size={28} color="#1DA1F2" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleEditToggle}>
-          <MaterialCommunityIcons name={editing ? 'check' : 'pencil'} size={28} color="#1DA1F2" />
+        <TouchableOpacity onPress={handleEditToggle} disabled={saving} activeOpacity={saving ? 1 : 0.7}>
+          <MaterialCommunityIcons 
+            name={editing ? 'check' : 'pencil'} 
+            size={28} 
+            color={saving ? "#666" : "#1DA1F2"} 
+          />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleLogout} style={{marginLeft: 12, padding: 4}}>
           <MaterialCommunityIcons name="logout" size={28} color="#E0245E" />
         </TouchableOpacity>
       </View>
       <View style={{alignItems: 'center', padding: 24, paddingTop: 8, overflow: 'visible'}}>
-        <View style={editing ? styles.avatarGlow : null}>
+        <View key={`avatar-${editing}`} style={editing ? styles.avatarGlow : null}>
           <TouchableOpacity
             disabled={!editing || uploading}
             onPress={pickImageAndUpload}
@@ -225,6 +272,7 @@ function ProfileScreen({ navigation }) {
         </View>
         {editing ? (
           <TextInput
+            key="editing-name"
             style={[styles.profileInfoValueLarge, styles.editGlow, {color:'#fff', fontSize:24, fontWeight:'bold', marginTop:8, textAlign:'center'}]}
             value={userData.firstName}
             onChangeText={text => setUserData({...userData, firstName: text})}
@@ -232,7 +280,7 @@ function ProfileScreen({ navigation }) {
             placeholderTextColor="#8E8E93"
           />
         ) : (
-          <Text style={{color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 8}}>{userData.firstName} {userData.lastName}</Text>
+          <Text key="display-name" style={{color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 8}}>{userData.firstName} {userData.lastName}</Text>
         )}
         <Text style={{color: '#8E8E93', fontSize: 16, marginBottom: 12}}>@{userData.username}</Text>
         <View style={[styles.profileInfoCardNew, { position: 'relative', zIndex: 20, overflow: 'visible' }]}> 
@@ -241,39 +289,33 @@ function ProfileScreen({ navigation }) {
               <MaterialCommunityIcons name="school-outline" size={22} color="#1DA1F2" style={{marginRight: 8}} />
               {editing ? (
                 <View style={{flex: 1, zIndex: 30, position: 'relative', overflow: 'visible'}}>
-                  <SchoolPicker
+                  <SimpleSchoolPicker
+                    key={`school-picker-${editing}`} // Force re-render when editing changes
                     value={userData.university || userData.school}
-                    onSchoolSelect={(schoolName, schoolData) => {
+                    onSchoolSelect={(schoolName) => {
                       setUserData({ 
                         ...userData, 
                         university: schoolName, 
-                        school: schoolName,
-                        schoolData: schoolData // Store additional school metadata
+                        school: schoolName
                       });
                     }}
                     placeholder="Search for your school..."
                     style={{ flex: 1 }}
-                    inputStyle={[
-                      styles.profileInfoValueLarge, 
-                      styles.editGlow,
-                      { 
-                        textAlign: 'left',
-                        fontSize: 16,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                      }
-                    ]}
-                    maxResults={8}
+                    maxResults={12}
+                    requireVerification={true}
                   />
                 </View>
               ) : (
-                <Text style={styles.profileInfoValueLarge}>{userData.university || userData.school || 'N/A'}</Text>
+                <Text style={styles.profileInfoValueLarge}>
+                  {userData.university || userData.school ? getCleanUniversityName(userData.university || userData.school) : 'N/A'}
+                </Text>
               )}
             </View>
             <View style={styles.profileInfoColIconOnlyNew}>
               <MaterialCommunityIcons name="book-outline" size={22} color="#F5C518" style={{marginRight: 8}} />
             {editing ? (
                 <TextInput
+                  key="editing-major"
                   style={[styles.profileInfoValueLarge, styles.editGlow]}
                   value={userData.major}
                   onChangeText={text => setUserData({...userData, major: text})}
@@ -281,7 +323,7 @@ function ProfileScreen({ navigation }) {
                   placeholderTextColor="#8E8E93"
                 />
               ) : (
-                <Text style={styles.profileInfoValueLarge}>{userData.major || 'N/A'}</Text>
+                <Text key="display-major" style={styles.profileInfoValueLarge}>{userData.major || 'N/A'}</Text>
               )}
             </View>
           </View>
@@ -289,6 +331,7 @@ function ProfileScreen({ navigation }) {
             <MaterialCommunityIcons name="balloon" size={22} color="#FF69B4" style={{marginRight: 10}} />
             {editing ? (
               <TextInput
+                key="editing-birthday"
                 style={[styles.profileInfoValueLarge, styles.editGlow]}
                 value={(() => {
                   let dateObj = null;
@@ -308,7 +351,7 @@ function ProfileScreen({ navigation }) {
                 editable={false}
               />
             ) : (
-              <Text style={styles.profileInfoValueLarge}>{(() => {
+              <Text key="display-birthday" style={styles.profileInfoValueLarge}>{(() => {
                 let dateObj = null;
                 if (userData.birthDate && userData.birthDate.toDate) {
                   dateObj = userData.birthDate.toDate();
@@ -326,6 +369,7 @@ function ProfileScreen({ navigation }) {
         <View style={[styles.bioSection, { overflow: 'visible' }] }>
           {editing ? (
             <TextInput
+              key="editing-bio"
               style={[styles.bioText, styles.editGlow]}
               value={userData.bio}
               onChangeText={text => setUserData({...userData, bio: text})}
@@ -335,7 +379,7 @@ function ProfileScreen({ navigation }) {
               textAlign="center"
             />
           ) : (
-            <Text style={styles.bioText}>{userData.bio || 'Add a short bio about yourself.'}</Text>
+            <Text key="display-bio" style={styles.bioText}>{userData.bio || 'Add a short bio about yourself.'}</Text>
           )}
         </View>
       </View>

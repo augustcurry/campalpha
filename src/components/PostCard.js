@@ -25,9 +25,9 @@ const PostCard = ({ post, navigation, renderToolbar }) => {
     if (currentUser && post.id) {
       // Track post view (async, non-blocking)
       storeFeedInteraction(currentUser.uid, 'view', post.id, {
-        postType: post.isRepost ? 'repost' : 'original',
-        hasImage: !!post.image,
-        hasText: !!post.text,
+        postType: Boolean(post.isRepost) ? 'repost' : 'original',
+        hasImage: Boolean(post.image),
+        hasText: Boolean(post.text),
         school: post.school || null
       }).catch(error => {
         // Silently fail to avoid disrupting user experience
@@ -63,7 +63,7 @@ const PostCard = ({ post, navigation, renderToolbar }) => {
     // Track click interaction
     if (currentUser) {
       storeFeedInteraction(currentUser.uid, 'click', targetPostId, {
-        fromRepost: post.isRepost,
+        fromRepost: Boolean(post.isRepost), // Ensure it's always a boolean
         clickType: 'post_detail',
         school: post.school || null
       }).catch(error => {

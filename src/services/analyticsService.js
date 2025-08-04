@@ -4,6 +4,27 @@ import { collection, addDoc, doc, updateDoc, getDoc, serverTimestamp } from 'fir
 import { db } from '../../firebase';
 
 /**
+ * Recursively clean data by removing undefined values to prevent Firebase errors
+ */
+const cleanFirebaseData = (data) => {
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(cleanFirebaseData);
+  }
+  
+  const cleaned = {};
+  Object.keys(data).forEach(key => {
+    if (data[key] !== undefined) {
+      cleaned[key] = cleanFirebaseData(data[key]);
+    }
+  });
+  return cleaned;
+};
+
+/**
  * Analytics service for storing post metrics and algorithm performance data
  */
 
@@ -43,7 +64,7 @@ export const storePostMetrics = async (post, scores, finalScore, userId = null) 
     };
 
     // Store in analytics collection
-    const docRef = await addDoc(collection(db, 'analytics', 'posts', 'metrics'), metricsData);
+    const docRef = await addDoc(collection(db, 'analytics', 'posts', 'metrics'), cleanFirebaseData(metricsData));
     
     // Optional: Store aggregated data for the post document
     await updatePostAnalytics(postId, finalScore, scores);
@@ -101,7 +122,7 @@ export const storeAlgorithmMetrics = async (posts, metrics, userId = null) => {
       calculatedAt: Date.now()
     };
 
-    const docRef = await addDoc(collection(db, 'analytics', 'algorithm', 'performance'), algorithmData);
+    const docRef = await addDoc(collection(db, 'analytics', 'algorithm', 'performance'), cleanFirebaseData(algorithmData));
     return docRef.id;
   } catch (error) {
     console.error('[AnalyticsService] Error storing algorithm metrics:', error);
@@ -123,7 +144,11 @@ export const storeFeedInteraction = async (userId, action, postId, metadata = {}
       sessionId: Date.now() // Simple session tracking
     };
 
-    const docRef = await addDoc(collection(db, 'analytics', 'interactions', 'feed'), interactionData);
+    // Clean data before sending to Firebase
+    const cleanedData = cleanFirebaseData(interactionData);
+    console.log('[AnalyticsService] Storing interaction data:', JSON.stringify(cleanedData, null, 2));
+
+    const docRef = await addDoc(collection(db, 'analytics', 'interactions', 'feed'), cleanedData);
     return docRef.id;
   } catch (error) {
     console.error('[AnalyticsService] Error storing feed interaction:', error);
@@ -163,7 +188,7 @@ export const storeUserAlgorithmPreferences = async (userId, preferences) => {
       updatedAt: Date.now()
     };
 
-    const docRef = await addDoc(collection(db, 'analytics', 'users', 'preferences'), userPrefData);
+    const docRef = await addDoc(collection(db, 'analytics', 'users', 'preferences'), cleanFirebaseData(userPrefData));
     return docRef.id;
   } catch (error) {
     console.error('[AnalyticsService] Error storing user preferences:', error);
