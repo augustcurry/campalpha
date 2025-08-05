@@ -1,11 +1,35 @@
-# Sample Snack app
+CampAlpha 🚀
+A hyperlocal social network designed exclusively for college life. CampAlpha goes beyond a simple feed, integrating into the daily fabric of campus with features for social planning, academic collaboration, and real-time campus updates.
 
-Open the `App.js` file to start writing some code. You can preview the changes directly on your phone or tablet by scanning the **QR code** or use the iOS or Android emulators. When you're done, click **Save** and share the link!
+About The Project
+Traditional social media is too broad. CampAlpha is built on the idea that the most meaningful connections and information are local. This app is designed to be an indispensable tool for college students, combining the best elements of a social feed with high-utility features that solve the unique challenges of campus life.
 
-When you're ready to see everything that Expo provides (or if you want to use your own editor) you can **Download** your project and use it with [expo cli](https://docs.expo.dev/get-started/installation/#expo-cli)).
+From finding out which dining hall has the best food right now to organizing a last-minute study group for a midterm, CampAlpha aims to be the central hub for a student's entire world.
 
-All projects created in Snack are publicly available, so you can easily share the link to this project via link, or embed it on a web page with the `<>` button.
+Key Features
+Hybrid Social Feed: A dynamic feed that feels as visual as Instagram for photo posts and as conversational as Twitter for text and poll-based discussions.
 
-If you're having problems, you can tweet to us [@expo](https://twitter.com/expo) or ask in our [forums](https://forums.expo.dev/c/expo-dev-tools/61) or [Discord](https://chat.expo.dev/).
+Advanced Feed Algorithm: A custom scoring engine that surfaces the most relevant and engaging content based on engagement, quality, personalization, and recency.
 
-Snack is Open Source. You can find the code on the [GitHub repo](https://github.com/expo/snack).
+Deep Social Graph: A full-featured social network with user profiles, following/follower systems, likes, and nested comments/replies.
+
+Rich Content Creation: Users can create posts with text, images, articles, links, hashtags, and interactive polls.
+
+Campus-Specific Utilities (Planned):
+
+Real-time "Campus Intel" feeds (Dining Hall reviews, study spot availability).
+
+Class-Specific Feeds for academic collaboration.
+
+Enhanced Event Discovery with map integration.
+
+A trusted Campus Marketplace for buying and selling goods.
+
+Tech Stack
+This project is built with a modern, cross-platform mobile stack.
+
+Frontend: React Native with Expo
+
+Backend & Database: Firebase (Firestore, Authentication, Cloud Storage)
+
+Navigation: React Navigation
