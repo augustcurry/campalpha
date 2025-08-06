@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system';
 import { uploadString } from 'firebase/storage';
 import { View, Text, FlatList, ActivityIndicator, StyleSheet, Image, TouchableOpacity, SafeAreaView, TextInput } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { collection, query, orderBy, onSnapshot, getDoc, doc as firestoreDoc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDoc, doc as firestoreDoc, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { signOut } from 'firebase/auth';
 import * as ImagePicker from 'expo-image-picker';
