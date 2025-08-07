@@ -5,7 +5,7 @@ import { BlurView } from 'expo-blur';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import DiscoverScreen from '../screens/DiscoverScreen';
-import EventsScreen from '../screens/EventsScreen';
+import EventsScreen from '../screens/EventsScreen.js';
 import MapScreen from '../screens/MapScreen';
 import SearchScreen from '../screens/SearchScreen';
 
@@ -145,16 +145,24 @@ function TabNavigator({ navigation }) {
         name="Discover" 
         options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="compass" color={color} size={30} />)}}
       >
-        {/* Pass the stack's navigation prop down to the screen */}
         {(props) => <DiscoverScreen {...props} navigation={navigation} setTabBarVisible={setTabBarVisible} />}
       </Tab.Screen>
-      <Tab.Screen name="Events" options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="calendar-star" color={color} size={30} />) }}>
+      <Tab.Screen 
+        name="Events" 
+        options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="calendar-star" color={color} size={30} />) }}
+      >
         {(props) => <EventsScreen {...props} navigation={navigation} setTabBarVisible={setTabBarVisible} />}
       </Tab.Screen>
-      <Tab.Screen name="Map" options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="map-marker" color={color} size={30} />) }}>
+      <Tab.Screen 
+        name="Map" 
+        options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="map-marker" color={color} size={30} />) }}
+      >
         {(props) => <MapScreen {...props} navigation={navigation} setTabBarVisible={setTabBarVisible} />}
       </Tab.Screen>
-      <Tab.Screen name="Search" options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="magnify" color={color} size={30} />) }}>
+      <Tab.Screen 
+        name="Search" 
+        options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="magnify" color={color} size={30} />) }}
+      >
         {(props) => <SearchScreen {...props} navigation={navigation} setTabBarVisible={setTabBarVisible} />}
       </Tab.Screen>
     </Tab.Navigator>
