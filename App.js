@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Autocomplete from 'react-native-autocomplete-input';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { DataProvider } from './src/context/DataContext';
 import DiscoverScreen from './src/screens/DiscoverScreen';
 import NewPostScreen from './src/screens/NewPostScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -87,9 +88,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" />
-      <NavigationContainer theme={DarkTheme}>
-        {user ? <RootStack /> : <AuthScreen />}
-      </NavigationContainer>
+      <DataProvider>
+        <NavigationContainer theme={DarkTheme}>
+          {user ? <RootStack /> : <AuthScreen />}
+        </NavigationContainer>
+      </DataProvider>
     </SafeAreaProvider>
   );
 }
