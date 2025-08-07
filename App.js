@@ -48,7 +48,9 @@ function TabNavigator({ navigation }) {
       <Tab.Screen name="Discover" options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="compass" color={color} size={30} />)}}>
         {(props) => <DiscoverScreen {...props} navigation={navigation} setTabBarVisible={setTabBarVisible} />}
       </Tab.Screen>
-      <Tab.Screen name="Events" component={EventsScreen} options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="calendar-star" color={color} size={30} />) }} />
+      <Tab.Screen name="Events" options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="calendar-star" color={color} size={30} />) }}>
+        {(props) => <EventsScreen {...props} navigation={navigation} setTabBarVisible={setTabBarVisible} />}
+      </Tab.Screen>
       <Tab.Screen name="Map" component={MapScreen} options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="map-marker" color={color} size={30} />) }} />
       <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarIcon: ({ color }) => (<MaterialCommunityIcons name="magnify" color={color} size={30} />) }} />
       {/* Profile tab removed; now accessed from header button */}
@@ -69,6 +71,7 @@ function RootStack() {
 }
 
 export default function App() {
+  console.log('APP VERSION: 2.0 - UPDATED!');
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
