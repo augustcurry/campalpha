@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { collection, query, onSnapshot, doc, getDoc, orderBy, where } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import dataFetcher from '../services/dataSyncService';
 
 // Action types for the reducer
 const ACTIONS = {
@@ -185,12 +186,11 @@ export function DataProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // Fetch user profile
+  // Fetch user profile using optimized fetcher
   const fetchUserProfile = useCallback(async (userId) => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        const profileData = userDoc.data();
+      const profileData = await dataFetcher.fetchUserProfile(userId);
+      if (profileData) {
         dispatch({ type: ACTIONS.SET_USER_PROFILE, payload: { uid: userId, ...profileData } });
       }
     } catch (error) {
@@ -199,80 +199,101 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  // Setup real-time data listeners
+  // Setup optimized real-time data listeners
   const setupDataListeners = useCallback((userId) => {
-    // Listen for user profile changes
-    const userProfileUnsubscribe = onSnapshot(doc(db, 'users', userId), (doc) => {
-      if (doc.exists()) {
-        const profileData = doc.data();
-        dispatch({ type: ACTIONS.SET_USER_PROFILE, payload: { uid: userId, ...profileData } });
+    // Listen for user profile changes using optimized listener
+    const userProfileUnsubscribe = dataFetcher.createOptimizedListener(
+      'users',
+      {
+        filters: { __id__: userId },
+        onData: (data) => {
+          if (data.length > 0) {
+            const profileData = data[0];
+            dispatch({ type: ACTIONS.SET_USER_PROFILE, payload: { uid: userId, ...profileData } });
+          }
+        },
+        onError: (error) => {
+          console.error('[DataContext] User profile listener error:', error);
+        }
       }
-    });
+    );
 
-    // Listen for posts
-    const postsQuery = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    const postsUnsubscribe = onSnapshot(postsQuery, (querySnapshot) => {
-      const posts = [];
-      const userIds = new Set();
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        posts.push({
-          id: doc.id,
-          ...data,
-          timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp,
-          event_time: data.event_time?.toMillis ? data.event_time.toMillis() : data.event_time,
-        });
-        if (data.userId) userIds.add(data.userId);
-      });
+    // Listen for posts using optimized listener
+    const postsUnsubscribe = dataFetcher.createOptimizedListener(
+      'posts',
+      {
+        orderByField: 'createdAt',
+        orderDirection: 'desc',
+        limitCount: 100,
+        onData: async (postList) => {
+          const userIds = new Set();
+          const processedPosts = postList.map(post => {
+            if (post.userId) userIds.add(post.userId);
+            return {
+              ...post,
+              timestamp: post.timestamp?.toMillis ? post.timestamp.toMillis() : post.timestamp,
+              event_time: post.event_time?.toMillis ? post.event_time.toMillis() : post.event_time,
+            };
+          });
 
-      dispatch({ type: ACTIONS.SET_POSTS, payload: posts });
-      
-      // Fetch missing user data for cache
-      fetchMissingUserData(Array.from(userIds));
-    });
+          // Fetch missing user data efficiently
+          await fetchMissingUserData(Array.from(userIds));
+          
+          dispatch({ type: ACTIONS.SET_POSTS, payload: processedPosts });
+        },
+        onError: (error) => {
+          console.error('[DataContext] Posts listener error:', error);
+          dispatch({ type: ACTIONS.SET_ERROR, payload: 'Failed to load posts' });
+        }
+      }
+    );
 
-    // Listen for following/followers (if you have these collections)
-    const followingQuery = query(collection(db, 'users', userId, 'following'));
-    const followingUnsubscribe = onSnapshot(followingQuery, (querySnapshot) => {
-      const following = [];
-      querySnapshot.forEach((doc) => {
-        following.push(doc.id);
-      });
-      dispatch({ type: ACTIONS.SET_FOLLOWING, payload: following });
-    });
+    // Listen for following/followers
+    const followingUnsubscribe = dataFetcher.createOptimizedListener(
+      `users/${userId}/following`,
+      {
+        onData: (data) => {
+          const following = data.map(doc => doc.id);
+          dispatch({ type: ACTIONS.SET_FOLLOWING, payload: following });
+        }
+      }
+    );
 
-    const followersQuery = query(collection(db, 'users', userId, 'followers'));
-    const followersUnsubscribe = onSnapshot(followersQuery, (querySnapshot) => {
-      const followers = [];
-      querySnapshot.forEach((doc) => {
-        followers.push(doc.id);
-      });
-      dispatch({ type: ACTIONS.SET_FOLLOWERS, payload: followers });
-    });
+    const followersUnsubscribe = dataFetcher.createOptimizedListener(
+      `users/${userId}/followers`,
+      {
+        onData: (data) => {
+          const followers = data.map(doc => doc.id);
+          dispatch({ type: ACTIONS.SET_FOLLOWERS, payload: followers });
+        }
+      }
+    );
 
     // Listen for notifications
-    const notificationsQuery = query(
-      collection(db, 'users', userId, 'notifications'),
-      orderBy('createdAt', 'desc')
+    const notificationsUnsubscribe = dataFetcher.createOptimizedListener(
+      `users/${userId}/notifications`,
+      {
+        orderByField: 'createdAt',
+        orderDirection: 'desc',
+        limitCount: 50,
+        onData: (data) => {
+          dispatch({ type: ACTIONS.SET_NOTIFICATIONS, payload: data });
+        }
+      }
     );
-    const notificationsUnsubscribe = onSnapshot(notificationsQuery, (querySnapshot) => {
-      const notifications = [];
-      querySnapshot.forEach((doc) => {
-        notifications.push({ id: doc.id, ...doc.data() });
-      });
-      dispatch({ type: ACTIONS.SET_NOTIFICATIONS, payload: notifications });
-    });
 
     // Listen for events
-    const eventsQuery = query(collection(db, 'events'), orderBy('startTime', 'asc'));
-    const eventsUnsubscribe = onSnapshot(eventsQuery, (querySnapshot) => {
-      const events = [];
-      querySnapshot.forEach((doc) => {
-        events.push({ id: doc.id, ...doc.data() });
-      });
-      dispatch({ type: ACTIONS.SET_EVENTS, payload: events });
-    });
+    const eventsUnsubscribe = dataFetcher.createOptimizedListener(
+      'events',
+      {
+        orderByField: 'startTime',
+        orderDirection: 'asc',
+        limitCount: 50,
+        onData: (data) => {
+          dispatch({ type: ACTIONS.SET_EVENTS, payload: data });
+        }
+      }
+    );
 
     // Return cleanup function
     return () => {
@@ -285,7 +306,7 @@ export function DataProvider({ children }) {
     };
   }, []);
 
-  // Fetch missing user data for cache
+  // Fetch missing user data for cache using optimized fetcher
   const fetchMissingUserData = useCallback(async (userIds) => {
     const currentCache = state.userCache;
     const missingIds = userIds.filter(id => !currentCache[id]);
@@ -299,9 +320,8 @@ export function DataProvider({ children }) {
     await Promise.all(
       missingIds.map(async (userId) => {
         try {
-          const userDoc = await getDoc(doc(db, 'users', userId));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
+          const data = await dataFetcher.fetchUserProfile(userId);
+          if (data) {
             userData[userId] = data;
             schoolData[userId] = data.university || data.school || '';
             avatarData[userId] = data.photoURL || '';
@@ -391,10 +411,31 @@ export function DataProvider({ children }) {
     },
   };
 
-  const value = {
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
     ...state,
     ...actions,
-  };
+  }), [state, actions]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      dataFetcher.cleanupListeners();
+      dataFetcher.cleanup();
+    };
+  }, []);
+
+  // Log performance metrics periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const metrics = dataFetcher.getPerformanceMetrics();
+      if (metrics.cacheHitRate < 0.5) {
+        console.warn('[DataContext] Low cache hit rate:', (metrics.cacheHitRate * 100).toFixed(1) + '%');
+      }
+    }, 60000); // Every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <DataContext.Provider value={value}>

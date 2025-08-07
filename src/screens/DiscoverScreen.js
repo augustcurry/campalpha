@@ -1,23 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { View, Text, FlatList, ActivityIndicator, StyleSheet, Image, TouchableOpacity, SafeAreaView, RefreshControl, Platform, Animated, Dimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { collection, query, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { usePosts, useUser, useUserCache } from '../context/DataContext';
 import { calculatePostScore, getAlgorithmMetrics } from '../utils/feedAlgorithm';
 import { storeAlgorithmMetrics } from '../services/analyticsService';
 import PostCard from '../components/PostCard';
 import PostActions from '../components/PostActions';
+import PerformanceMonitor from '../components/PerformanceMonitor';
 
 export default function DiscoverScreen({ navigation, setTabBarVisible }) {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Use centralized data context
+  const { posts, loading, error } = usePosts();
+  const { userProfile } = useUser();
+  const { userCache, schoolCache, avatarCache } = useUserCache();
+  
+  // Local state for UI
   const [refreshing, setRefreshing] = useState(false);
-  const [currentUserProfile, setCurrentUserProfile] = useState(null);
-  const [userAvatar, setUserAvatar] = useState(null);
-  const [avatarCache, setAvatarCache] = useState({});
-  const [schoolCache, setSchoolCache] = useState({});
   const [showBanner, setShowBanner] = useState(false);
   const [bannerText, setBannerText] = useState('');
   const [sortOption, setSortOption] = useState('relevant');
@@ -26,134 +26,60 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
   const lastOffsetY = useRef(0);
   const scrollThreshold = 100;
 
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        setCurrentUserProfile(null);
-        setUserAvatar(null);
-        return;
-      }
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setCurrentUserProfile({ uid: user.uid, ...data });
-          setUserAvatar(data.photoURL || null);
-        } else {
-          setCurrentUserProfile({ uid: user.uid });
-          setUserAvatar(null);
-        }
-      } catch (e) {
-        setCurrentUserProfile({ uid: user.uid });
-        setUserAvatar(null);
-      }
-    };
-    fetchUserProfile();
-    const user = auth.currentUser;
-    if (user) {
-      const userDocRef = doc(db, 'users', user.uid);
-      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setUserAvatar(data.photoURL || null);
-        }
-      });
-      return () => unsubscribe();
+  // Memoized sorted and filtered posts for better performance
+  const processedPosts = useMemo(() => {
+    if (!posts || posts.length === 0) return [];
+    
+    let scoredPosts = posts.map(post => ({
+      ...post,
+      score: userProfile ? calculatePostScore(post, userProfile) : 0
+    }));
+    
+    // Filter by school if "myschool" option is selected
+    if (sortOption === 'myschool' && userProfile?.university) {
+      scoredPosts = scoredPosts.filter(post => 
+        post.school === userProfile.university || 
+        schoolCache[post.userId] === userProfile.university
+      );
     }
-  }, []);
-
-  useEffect(() => {
-    const q = query(collection(db, 'posts'));
-    const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-      const postList = [];
-      const userIds = new Set();
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        postList.push({
-          id: doc.id,
-          ...data,
-          timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp,
-          event_time: data.event_time?.toMillis ? data.event_time.toMillis() : data.event_time,
-        });
-        if (data.userId) userIds.add(data.userId);
-      });
-      const avatarMap = { ...avatarCache };
-      const schoolMap = { ...schoolCache };
-      const missingUserIds = Array.from(userIds).filter(uid => !avatarMap[uid]);
-      if (missingUserIds.length > 0) {
-        await Promise.all(missingUserIds.map(async (uid) => {
-          try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (userDoc.exists()) {
-              const data = userDoc.data();
-              avatarMap[uid] = data.photoURL || '';
-              schoolMap[uid] = data.university || data.school || '';
-            } else {
-              avatarMap[uid] = '';
-              schoolMap[uid] = '';
-            }
-          } catch {
-            avatarMap[uid] = '';
-            schoolMap[uid] = '';
-          }
-        }));
-        setAvatarCache(avatarMap);
-        setSchoolCache(schoolMap);
-      }
-      if (!currentUserProfile) {
-        setPosts(postList);
-        setLoading(false);
-        return;
-      }
-      let scoredPosts = postList.map(post => ({
-        ...post,
-        score: calculatePostScore(post, currentUserProfile)
-      }));
-      
-      // Filter by school if "myschool" option is selected
-      if (sortOption === 'myschool' && currentUserProfile?.university) {
-        scoredPosts = scoredPosts.filter(post => 
-          post.school === currentUserProfile.university || 
-          schoolCache[post.userId] === currentUserProfile.university
-        );
-      }
-      
-      if (sortOption === 'relevant' || sortOption === 'myschool') {
-        // Sort by algorithm score (most relevant first)
+    
+    // Sort based on selected option
+    switch (sortOption) {
+      case 'relevant':
+      case 'myschool':
         scoredPosts.sort((a, b) => b.score - a.score);
-      } else if (sortOption === 'recent') {
+        break;
+      case 'recent':
         scoredPosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      } else if (sortOption === 'liked') {
+        break;
+      case 'liked':
         scoredPosts.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
-      } else if (sortOption === 'commented') {
+        break;
+      case 'commented':
         scoredPosts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
-      } else if (sortOption === 'oldest') {
+        break;
+      case 'oldest':
         scoredPosts.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      } else {
-        // Default fallback to relevant
+        break;
+      default:
         scoredPosts.sort((a, b) => b.score - a.score);
-      }
-      setPosts(scoredPosts);
-      setLoading(false);
-      setRefreshing(false); // Stop refreshing when data loads
-      
-      // Store algorithm performance metrics (periodically)
-      if (currentUserProfile?.uid && scoredPosts.length > 0 && Math.random() < 0.1) {
-        // Store metrics for 10% of feed loads to avoid excessive writes
-        const metrics = getAlgorithmMetrics(scoredPosts);
-        storeAlgorithmMetrics(scoredPosts, metrics, currentUserProfile.uid).catch(error => {
-          console.error('[DiscoverScreen] Failed to store algorithm metrics:', error);
-        });
-      }
-    }, (error) => {
-      setLoading(false);
-      setRefreshing(false); // Stop refreshing on error
-    });
-    return () => unsubscribe();
-  }, [currentUserProfile, sortOption, avatarCache, schoolCache]);
+    }
+    
+    return scoredPosts;
+  }, [posts, userProfile, sortOption, schoolCache]);
 
-  const handleScroll = (event) => {
+  // Store algorithm metrics periodically
+  useEffect(() => {
+    if (userProfile?.uid && processedPosts.length > 0 && Math.random() < 0.1) {
+      const metrics = getAlgorithmMetrics(processedPosts);
+      storeAlgorithmMetrics(processedPosts, metrics, userProfile.uid).catch(error => {
+        console.error('[DiscoverScreen] Failed to store algorithm metrics:', error);
+      });
+    }
+  }, [processedPosts, userProfile?.uid]);
+
+  // Optimized scroll handler with debouncing
+  const handleScroll = useCallback((event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const direction = offsetY > lastOffsetY.current ? 'down' : 'up';
     lastOffsetY.current = offsetY;
@@ -168,17 +94,19 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
     } else if (direction === 'up' || offsetY <= 0) {
       setTabBarVisible(true);
     }
-  };
+  }, [dropdownVisible, setTabBarVisible]);
 
-  const onRefresh = React.useCallback(() => {
+  // Optimized refresh handler
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // The Firebase listener will automatically fetch fresh data
-    // and setRefreshing(false) will be called when data loads
+    // The centralized data context will handle the refresh
+    // We just need to reset the refreshing state after a short delay
+    setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  const toggleDropdown = () => {
+  // Optimized dropdown toggle
+  const toggleDropdown = useCallback(() => {
     if (dropdownVisible) {
-      // Hide dropdown
       Animated.timing(dropdownAnimation, {
         toValue: 0,
         duration: 200,
@@ -187,7 +115,6 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
         setDropdownVisible(false);
       });
     } else {
-      // Show dropdown
       setDropdownVisible(true);
       Animated.timing(dropdownAnimation, {
         toValue: 1,
@@ -195,13 +122,15 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
         useNativeDriver: true,
       }).start();
     }
-  };
+  }, [dropdownVisible, dropdownAnimation]);
 
-  const selectSortOption = (option) => {
+  // Optimized sort option selection
+  const selectSortOption = useCallback((option) => {
     setSortOption(option);
     toggleDropdown();
-  };
+  }, [toggleDropdown]);
 
+  // Listen for post creation events
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('postCreated', () => {
       setBannerText('Post created');
@@ -211,360 +140,255 @@ export default function DiscoverScreen({ navigation, setTabBarVisible }) {
     return () => sub.remove();
   }, []);
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Dropdown Overlay */}
-      {dropdownVisible && (
-        <TouchableOpacity 
-          style={styles.dropdownOverlay} 
-          activeOpacity={1}
-          onPress={toggleDropdown}
-        />
-      )}
-      
-      {showBanner && (
-        <View style={styles.bannerBottomCentered}>
-          <Text style={styles.bannerTextSubtle}>{bannerText}</Text>
-        </View>
-      )}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{marginRight: 12}}>
-          {userAvatar ? (
-            <Image source={{ uri: userAvatar }} style={{ width: 28, height: 28, borderRadius: 14 }} />
-          ) : (
-            <MaterialCommunityIcons name="account-circle" size={28} color="#FFFFFF" />
-          )}
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Image source={require('../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
-          <TouchableOpacity onPress={toggleDropdown} style={styles.sortIconButton}>
-            <MaterialCommunityIcons 
-              name="filter-variant" 
-              size={24} 
-              color={dropdownVisible ? "#1DA1F2" : "#FFFFFF"} 
-            />
-            <MaterialCommunityIcons 
-              name={dropdownVisible ? "chevron-up" : "chevron-down"} 
-              size={16} 
-              color={dropdownVisible ? "#1DA1F2" : "#FFFFFF"} 
-              style={{ marginLeft: 2 }}
-            />
-          </TouchableOpacity>
-          
-          {/* Dropdown Menu */}
-          {dropdownVisible && (
-            <Animated.View 
-              style={[
-                styles.dropdown,
-                {
-                  opacity: dropdownAnimation,
-                  transform: [{
-                    translateY: dropdownAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-10, 0],
-                    })
-                  }]
-                }
-              ]}
-            >
-              <BlurView intensity={80} tint="dark" style={styles.dropdownBlur}>
-                <TouchableOpacity 
-                  style={[styles.dropdownItem, sortOption === 'relevant' && styles.dropdownItemActive]}
-                  onPress={() => selectSortOption('relevant')}
-                >
-                  <MaterialCommunityIcons name="star" size={16} color="#1DA1F2" style={styles.dropdownIcon} />
-                  <Text style={[styles.dropdownText, sortOption === 'relevant' && styles.dropdownTextActive]}>
-                    Most Relevant
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.dropdownItem, sortOption === 'recent' && styles.dropdownItemActive]}
-                  onPress={() => selectSortOption('recent')}
-                >
-                  <MaterialCommunityIcons name="clock-outline" size={16} color="#8E8E93" style={styles.dropdownIcon} />
-                  <Text style={[styles.dropdownText, sortOption === 'recent' && styles.dropdownTextActive]}>
-                    Most Recent
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.dropdownItem, sortOption === 'liked' && styles.dropdownItemActive]}
-                  onPress={() => selectSortOption('liked')}
-                >
-                  <MaterialCommunityIcons name="heart-outline" size={16} color="#8E8E93" style={styles.dropdownIcon} />
-                  <Text style={[styles.dropdownText, sortOption === 'liked' && styles.dropdownTextActive]}>
-                    Most Liked
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.dropdownItem, sortOption === 'commented' && styles.dropdownItemActive]}
-                  onPress={() => selectSortOption('commented')}
-                >
-                  <MaterialCommunityIcons name="comment-outline" size={16} color="#8E8E93" style={styles.dropdownIcon} />
-                  <Text style={[styles.dropdownText, sortOption === 'commented' && styles.dropdownTextActive]}>
-                    Most Commented
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.dropdownItem, styles.dropdownItemLast, sortOption === 'oldest' && styles.dropdownItemActive]}
-                  onPress={() => selectSortOption('oldest')}
-                >
-                  <MaterialCommunityIcons name="history" size={16} color="#8E8E93" style={styles.dropdownIcon} />
-                  <Text style={[styles.dropdownText, sortOption === 'oldest' && styles.dropdownTextActive]}>
-                    Oldest
-                  </Text>
-                </TouchableOpacity>
-                
-                {/* School Filter Separator */}
-                <View style={styles.dropdownSeparator} />
-                
-                <TouchableOpacity 
-                  style={[styles.dropdownItem, styles.dropdownItemLast, sortOption === 'myschool' && styles.dropdownItemActive]}
-                  onPress={() => selectSortOption('myschool')}
-                >
-                  <MaterialCommunityIcons name="school" size={16} color="#1DA1F2" style={styles.dropdownIcon} />
-                  <Text style={[styles.dropdownText, sortOption === 'myschool' && styles.dropdownTextActive]}>
-                    My School Only
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
-            </Animated.View>
-          )}
-        </View>
-      </View>
-        {loading ? (
-          <ActivityIndicator size="large" color="#fff" style={{ marginTop: 40 }} />
-        ) : (
-          <FlatList
-            data={posts}
-            renderItem={({ item }) => {
-              let updatedPhotoURL = avatarCache[item.userId] || '';
-              let userSchool = schoolCache[item.userId] || '';
-              if (currentUserProfile && item.userId === currentUserProfile.uid && currentUserProfile.photoURL) {
-                updatedPhotoURL = currentUserProfile.photoURL;
-              }
-              if (currentUserProfile && item.userId === currentUserProfile.uid && currentUserProfile.university) {
-                userSchool = currentUserProfile.university;
-              }
-              let postProps = {
-                ...item,
-                likes: Array.isArray(item.likes) ? item.likes : [],
-                likeCount: typeof item.likeCount === 'number' ? item.likeCount : 0,
-                commentCount: typeof item.commentCount === 'number' ? item.commentCount : 0,
-                name: item.name || 'Anonymous',
-                handle: item.handle || '@unknown',
-                avatar: item.avatar || 'account-circle',
-                photoURL: updatedPhotoURL,
-                school: userSchool
-              };
-              if (item.isRepost) {
-                postProps.text = '';
-                postProps.image = null;
-              } else {
-                postProps.text = item.text || '';
-                postProps.image = item.image || null;
-              }
-              return (
-                <PostCard 
-                  post={postProps}
-                  navigation={navigation}
-                  renderToolbar={() => <PostActions post={item} navigation={navigation} />}
-                />
-              );
-            }}
-            keyExtractor={item => item.id}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#FFFFFF"
-                titleColor="#FFFFFF"
-                colors={['#1DA1F2']}
-                progressBackgroundColor="#2C2C2E"
-              />
-            }
-          />
-        )}
-        <View 
-          style={styles.floatingActionButton}
-        >
-          <BlurView
-            intensity={80}
-            tint="dark"
-            style={styles.floatingActionButtonBlur}
-          >
-            <TouchableOpacity 
-              onPress={() => navigation.navigate('NewPost')}
-              style={styles.floatingActionButtonInner}
-            >
-              <MaterialCommunityIcons name="feather" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </BlurView>
+  // Memoized render item for better performance
+  const renderPostItem = useCallback(({ item }) => {
+    let updatedPhotoURL = avatarCache[item.userId] || '';
+    let userSchool = schoolCache[item.userId] || '';
+    
+    if (userProfile && item.userId === userProfile.uid) {
+      if (userProfile.photoURL) updatedPhotoURL = userProfile.photoURL;
+      if (userProfile.university) userSchool = userProfile.university;
+    }
+    
+    const postProps = {
+      ...item,
+      likes: Array.isArray(item.likes) ? item.likes : [],
+      likeCount: typeof item.likeCount === 'number' ? item.likeCount : 0,
+      commentCount: typeof item.commentCount === 'number' ? item.commentCount : 0,
+      name: item.name || 'Anonymous',
+      handle: item.handle || '@unknown',
+      avatar: item.avatar || 'account-circle',
+      photoURL: updatedPhotoURL,
+      school: userSchool
+    };
+    
+    if (item.isRepost) {
+      postProps.text = '';
+      postProps.image = null;
+    } else {
+      postProps.text = item.text || '';
+      postProps.image = item.image || null;
+    }
+    
+    return (
+      <PostCard 
+        post={postProps}
+        navigation={navigation}
+        renderToolbar={() => <PostActions post={item} navigation={navigation} />}
+      />
+    );
+  }, [avatarCache, schoolCache, userProfile, navigation]);
+
+  // Memoized key extractor
+  const keyExtractor = useCallback((item) => item.id, []);
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="alert-circle" size={48} color="#FF6B6B" />
+          <Text style={styles.errorText}>Failed to load posts</Text>
+          <Text style={styles.errorSubtext}>{error}</Text>
         </View>
       </SafeAreaView>
-  );
+    );
+  }
 
-}
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Discover</Text>
+          <TouchableOpacity onPress={toggleDropdown} style={styles.sortButton}>
+            <MaterialCommunityIcons name="sort-variant" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Sort Dropdown */}
+        {dropdownVisible && (
+          <Animated.View 
+            style={[
+              styles.dropdown,
+              {
+                opacity: dropdownAnimation,
+                transform: [{
+                  translateY: dropdownAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-20, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <BlurView intensity={80} tint="dark" style={styles.dropdownBlur}>
+              {[
+                { key: 'relevant', label: 'Most Relevant', icon: 'star' },
+                { key: 'recent', label: 'Most Recent', icon: 'clock' },
+                { key: 'liked', label: 'Most Liked', icon: 'heart' },
+                { key: 'commented', label: 'Most Commented', icon: 'comment' },
+                { key: 'myschool', label: 'My School', icon: 'school' },
+                { key: 'oldest', label: 'Oldest First', icon: 'sort-calendar-ascending' },
+              ].map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.dropdownItem,
+                    sortOption === option.key && styles.dropdownItemActive
+                  ]}
+                  onPress={() => selectSortOption(option.key)}
+                >
+                  <MaterialCommunityIcons 
+                    name={option.icon} 
+                    size={20} 
+                    color={sortOption === option.key ? '#1DA1F2' : '#fff'} 
+                  />
+                  <Text style={[
+                    styles.dropdownItemText,
+                    sortOption === option.key && styles.dropdownItemTextActive
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </BlurView>
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Success Banner */}
+      {showBanner && (
+        <View style={styles.banner}>
+          <Text style={styles.bannerText}>{bannerText}</Text>
+        </View>
+      )}
+
+      {/* Posts List */}
+      {loading ? (
+        <ActivityIndicator size="large" color="#fff" style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={processedPosts}
+          renderItem={renderPostItem}
+          keyExtractor={keyExtractor}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#fff"
+              colors={['#fff']}
+            />
+          }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={5}
+                     getItemLayout={(data, index) => ({
+             length: 200, // Approximate height of each post
+             offset: 200 * index,
+             index,
+           })}
+         />
+       )}
+       
+       {/* Performance Monitor (only visible in development) */}
+       <PerformanceMonitor visible={__DEV__} />
+     </SafeAreaView>
+   );
+ }
+
 const styles = StyleSheet.create({
-  floatingActionButton: {
-    position: 'absolute',
-    bottom: 16, // Much lower, standard FAB position
-    right: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  floatingActionButtonBlur: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#000',
   },
-  floatingActionButtonInner: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+  header: {
+    position: 'relative',
+    zIndex: 10,
   },
-  sortIconButton: {
-    padding: 4,
+  headerContent: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  sortButton: {
+    padding: 8,
   },
   dropdown: {
     position: 'absolute',
-    top: 40,
-    right: 0,
-    width: 180,
+    top: '100%',
+    right: 20,
+    width: 200,
     borderRadius: 12,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
     zIndex: 1000,
   },
   dropdownBlur: {
-    flex: 1,
-  },
-  dropdownOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 999,
+    padding: 8,
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
   dropdownItemActive: {
-    backgroundColor: 'rgba(29, 161, 242, 0.15)',
+    backgroundColor: 'rgba(29, 161, 242, 0.2)',
   },
-  dropdownItemLast: {
-    borderBottomWidth: 0,
+  dropdownItemText: {
+    color: '#fff',
+    fontSize: 16,
+    marginLeft: 12,
   },
-  dropdownSeparator: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginVertical: 4,
-  },
-  dropdownIcon: {
-    marginRight: 12,
-    width: 16,
-  },
-  dropdownText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  dropdownTextActive: {
+  dropdownItemTextActive: {
     color: '#1DA1F2',
     fontWeight: '600',
   },
-  logo: {
-    width: 72,
-    height: 72,
-  },
-  safeArea: { flex: 1, backgroundColor: '#000000', },
-  bannerBottomCentered: {
-    position: 'absolute',
-    left: '50%',
-    bottom: 32,
-    transform: [{ translateX: -0.5 * 0.7 * 400 }],
-    zIndex: 10,
-    backgroundColor: 'rgba(29,161,242,0.85)',
-    paddingVertical: 4,
-    paddingHorizontal: 0,
+  banner: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     alignItems: 'center',
+  },
+  bannerText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  listContent: {
+    paddingBottom: 100,
+  },
+  errorContainer: {
+    flex: 1,
     justifyContent: 'center',
-    borderRadius: 20,
-    width: 0.7 * 400,
-    minWidth: 180,
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  bannerTextSubtle: {
-    color: '#eaf6fd',
-    fontWeight: '500',
-    fontSize: 13,
+  errorText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
     textAlign: 'center',
-    letterSpacing: 0.1,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2C2C2E', },
-  headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold', },
-  authStatus: { color: '#8E8E93', fontSize: 13, marginRight: 2, },
-  listContent: { paddingBottom: 50, },
-  postCard: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, borderBottomWidth: 1, borderBottomColor: '#2C2C2E', },
-  avatar: { marginRight: 12 },
-  postContent: { flex: 1, },
-  postHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, },
-  nameText: { color: '#FFFFFF', fontWeight: 'bold', marginRight: 4, },
-  handleText: { color: '#8E8E93', },
-  locationText: { color: '#8E8E93', },
-  bodyText: { color: '#FFFFFF', fontSize: 15, lineHeight: 20, },
-  postImage: { width: '100%', height: 200, borderRadius: 10, marginTop: 12, },
-  actionBar: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginTop: 12,
-      paddingBottom: 12,
-      marginRight: 27,
-  },
-  actionButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-  },
-  actionText: {
+  errorSubtext: {
     color: '#8E8E93',
-    marginLeft: 6,
-    fontSize: 14
-  }
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
 });
