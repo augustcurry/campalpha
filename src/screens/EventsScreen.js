@@ -24,6 +24,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 const storage = getStorage();
 
 function EventsScreen({ navigation, setTabBarVisible }) {
+  console.log('NEW EVENTS SCREEN LOADED!');
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

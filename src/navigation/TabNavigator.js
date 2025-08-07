@@ -5,7 +5,7 @@ import { BlurView } from 'expo-blur';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import DiscoverScreen from '../screens/DiscoverScreen';
-import EventsScreen from '../screens/EventsScreen';
+import EventsScreen from '../screens/EventsScreen.js';
 import MapScreen from '../screens/MapScreen';
 import SearchScreen from '../screens/SearchScreen';
 
