@@ -461,7 +461,7 @@ function EventsScreen({ navigation, setTabBarVisible }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Events</Text>
+        <Text style={styles.headerTitle}>NEW EVENTS SCREEN - UPDATED!</Text>
         <TouchableOpacity 
           style={styles.createEventButton}
           onPress={() => setShowCreateModal(true)}
@@ -546,7 +546,7 @@ function EventsScreen({ navigation, setTabBarVisible }) {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#000000' 
+    backgroundColor: '#FF0000' 
   },
   header: {
     flexDirection: 'row',
